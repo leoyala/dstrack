@@ -1,0 +1,100 @@
+[project]
+name = "dstrack"
+version = "0.1.0"
+description = "A Python package for versioning and monitoring dataset changes throughout the machine learning lifecycle."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Leonardo Ayala" }
+]
+keywords = ["dataset", "versioning", "monitoring", "machine learning", "mlops", "data science"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.urls]
+GitHub = "https://github.com/leoyala/dstrack"
+
+[project.scripts]
+dstrack = "dstrack:main"
+
+[build-system]
+requires = ["uv_build>=0.11.21,<0.12.0"]
+build-backend = "uv_build"
+
+# -----------------------------------------------------------------------------
+# Ruff: linter + formatter
+# -----------------------------------------------------------------------------
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# A pragmatic, high-signal rule set.
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort (import sorting)
+    "B",    # flake8-bugbear (likely bugs)
+    "UP",   # pyupgrade (modernize syntax)
+    "SIM",  # flake8-simplify
+    "C4",   # flake8-comprehensions
+    "PERF", # perflint (performance anti-patterns)
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "E501",  # line length is handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use assert, magic values, etc.
+"tests/**" = ["B", "S101"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"
+
+# -----------------------------------------------------------------------------
+# mypy: static type checking
+# -----------------------------------------------------------------------------
+[tool.mypy]
+files = ["src"]
+python_version = "3.11"
+strict = true
+show_error_codes = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+# Silence missing stubs for third-party libs that don't ship types.
+[[tool.mypy.overrides]]
+module = [
+    "numpy.*",
+    "pandas.*",
+    "sklearn.*",
+]
+ignore_missing_imports = true
+
+# -----------------------------------------------------------------------------
+# codespell: spell-checking for code, docstrings, and docs
+# -----------------------------------------------------------------------------
+[tool.codespell]
+ignore-words-list = "nd,hist,ans"
+skip = "*.lock,*.csv,*.parquet,./data,./datasets"

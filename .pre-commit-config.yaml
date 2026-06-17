@@ -1,0 +1,120 @@
+# .pre-commit-config.yaml
+#
+# Setup:
+#   pip install pre-commit          # or: uv tool install pre-commit
+#   pre-commit install              # installs the git hook
+#   pre-commit install --hook-type commit-msg   # only if you enable commitizen below
+#   pre-commit run --all-files      # run once across the whole repo
+#
+# Maintenance:
+#   pre-commit autoupdate           # bump all `rev:` pins to latest
+#
+# Docs: https://pre-commit.com  |  Hook index: https://pre-commit.com/hooks.html
+
+minimum_pre_commit_version: "3.5.0"
+
+default_language_version:
+  python: python3.11
+
+# Keep commits fast: only run on the commit stage by default.
+default_stages: [pre-commit]
+
+# Don't run hooks on generated / vendored / data paths.
+exclude: |
+  (?x)^(
+      \.git/.*|
+      \.venv/.*|
+      build/.*|
+      dist/.*|
+      docs/_build/.*|
+      .*\.egg-info/.*|
+      data/.*|
+      datasets/.*|
+      .*\.ipynb_checkpoints/.*
+  )$
+
+repos:
+  # ---------------------------------------------------------------------------
+  # Core hygiene: cheap, fast, catch-everything checks.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: debug-statements          # blocks stray breakpoint()/pdb
+      - id: detect-private-key        # blocks committed private keys
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+
+  # ---------------------------------------------------------------------------
+  # Ruff: linter + formatter (replaces flake8, isort, black, pyupgrade, etc.).
+  # Lint (with --fix) MUST run before the formatter.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        types_or: [python, pyi, jupyter]
+      - id: ruff-format
+        types_or: [python, pyi, jupyter]
+
+  # ---------------------------------------------------------------------------
+  # Static type checking (run on the package source only, to stay fast).
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.1.0
+    hooks:
+      - id: mypy
+        files: ^src/
+        args: [--ignore-missing-imports, --install-types, --non-interactive]
+
+  # ---------------------------------------------------------------------------
+  # Spelling: catches typos in code, docstrings, and docs.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.2
+    hooks:
+      - id: codespell
+        additional_dependencies: [tomli]
+        # Configure ignores in pyproject.toml under [tool.codespell].
+
+  # ---------------------------------------------------------------------------
+  # Notebooks: strip outputs before commit (clean diffs, no data leakage).
+  # Essential for ML repos that carry .ipynb files.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout
+
+  # ---------------------------------------------------------------------------
+  # Secret scanning (baseline-driven). Generate the baseline once with:
+  #   detect-secrets scan > .secrets.baseline
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+
+
+  # ---------------------------------------------------------------------------
+  # uv lock file update to make sure it is properly synced even if the
+  # dependencies have been updated.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.11.21
+    hooks:
+      - id: uv-lock
