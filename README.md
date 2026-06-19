@@ -1,5 +1,10 @@
 # dstrack
 
+<p align="center">
+  <img src="docs/assets/dstrack-logo.png" width="200" alt="dstrack logo">
+</p>
+
+
 A Python package for versioning and monitoring dataset changes throughout the machine learning lifecycle.
 
 ## Overview

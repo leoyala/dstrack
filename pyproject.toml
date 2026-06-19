@@ -98,3 +98,8 @@ ignore_missing_imports = true
 [tool.codespell]
 ignore-words-list = "nd,hist,ans"
 skip = "*.lock,*.csv,*.parquet,./data,./datasets"
+
+[dependency-groups]
+dev = [
+    "zensical>=0.0.45",
+]
