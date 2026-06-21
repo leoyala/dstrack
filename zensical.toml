@@ -27,7 +27,7 @@ site_author = "Leonardo Ayala"
 # The site_url is the canonical URL for your site. When building online
 # documentation you should set this.
 # Read more: https://zensical.org/docs/setup/basics/#site_url
-site_url = "https://leoyala.github.io/dstrack"
+site_url = "https://leoyala.github.io/dstrack/"
 
 # The copyright notice appears in the page footer and can contain an HTML
 # fragment.
@@ -36,6 +36,10 @@ site_url = "https://leoyala.github.io/dstrack"
 copyright = """
 Copyright &copy; 2026 Leonardo Ayala
 """
+
+# Github project configuration
+repo_url = "https://github.com/leoyala/dstrack/"
+repo_name = "leoyala/dstrack"
 
 # Zensical supports both implicit navigation and explicitly defined navigation.
 # If you decide not to define a navigation here then Zensical will simply
@@ -277,6 +281,10 @@ logo = "assets/dstrack-logo.png"
 #[project.theme.font]
 #text = "Inter"
 #code = "Jetbrains Mono"
+
+# Project theme icons
+[project.theme.icon]
+repo = "fontawesome/brands/github"
 
 # ----------------------------------------------------------------------------
 # In the "palette" subsection you can configure options for the color scheme.
