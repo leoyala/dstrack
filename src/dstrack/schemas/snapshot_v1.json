@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/leoyala/dstrack/schemas/snapshot/v1.json",
+  "title": "DatasetSnapshot",
+  "description": "A dstrack dataset snapshot. Captures semantic information about a tabular dataset at a point in time. See ADR-0001.",
+  "type": "object",
+  "required": [
+    "format_version",
+    "snapshot_id",
+    "created_at",
+    "created_by",
+    "dataset_name",
+    "dataset_path",
+    "source_type",
+    "source_hash",
+    "num_columns",
+    "columns",
+    "schema_hash",
+    "num_rows",
+    "column_stats",
+    "duplicate_row_fraction",
+    "near_duplicate_estimate",
+    "constant_columns",
+    "high_null_columns",
+    "row_minhash",
+    "row_hyperloglog"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format_version": {
+      "type": "string",
+      "const": "1",
+      "description": "Schema version. Readers must reject snapshots with an unrecognised version."
+    },
+    "snapshot_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this snapshot."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of when the snapshot was taken."
+    },
+    "created_by": {
+      "type": "string",
+      "description": "User or process that created the snapshot."
+    },
+    "dataset_name": {
+      "type": "string",
+      "description": "Human-readable name for the dataset."
+    },
+    "dataset_path": {
+      "type": "string",
+      "description": "Source path or URI at snapshot time."
+    },
+    "source_type": {
+      "type": "string",
+      "examples": ["file", "directory", "database", "huggingface", "s3"],
+      "description": "Origin kind of the dataset source."
+    },
+    "source_hash": {
+      "type": "string",
+      "description": "Cryptographic hash of the raw source bytes, or a Merkle tree hash for directories."
+    },
+    "description": {
+      "type": "string",
+      "description": "Free-text description of what this dataset represents."
+    },
+    "tags": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Arbitrary key-value labels for filtering and organisation."
+    },
+    "num_columns": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of columns/features."
+    },
+    "columns": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ColumnDescriptor" },
+      "description": "Ordered list of column descriptors."
+    },
+    "schema_hash": {
+      "type": "string",
+      "description": "Hash of (name, dtype) tuples in column order. Changes whenever the schema changes."
+    },
+    "num_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of records."
+    },
+    "column_stats": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/ColumnStats" },
+      "description": "Per-column statistics keyed by column name. The concrete shape depends on the column dtype; consumers must branch on the corresponding entry in `columns`."
+    },
+    "duplicate_row_fraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Estimated fraction of exact-duplicate rows."
+    },
+    "near_duplicate_estimate": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Approximate fraction of near-duplicate rows via MinHash/LSH."
+    },
+    "constant_columns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Names of columns with zero variance / a single unique value."
+    },
+    "high_null_columns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Names of columns where null_fraction > 0.5."
+    },
+    "row_minhash": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "description": "Base64-encoded MinHash signature of the row set. Enables Jaccard similarity between snapshots."
+    },
+    "row_hyperloglog": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "description": "Base64-encoded HyperLogLog sketch for cardinality estimation of unique rows."
+    },
+    "parent_snapshot_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the preceding snapshot of the same dataset, if one exists."
+    },
+    "pipeline_stage": {
+      "type": "string",
+      "enum": ["raw", "cleaned", "featurized", "augmented", "sampled", "final"],
+      "description": "Stage in the data pipeline at which this snapshot was taken."
+    },
+    "transform_description": {
+      "type": "string",
+      "description": "Human-readable description of the changes applied since the parent snapshot."
+    }
+  },
+  "$defs": {
+    "ColumnDescriptor": {
+      "type": "object",
+      "required": ["name", "dtype", "nullable"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Column identifier."
+        },
+        "dtype": {
+          "type": "string",
+          "examples": [
+            "int8", "int16", "int32", "int64",
+            "float16", "float32", "float64",
+            "string", "bool", "datetime64", "bytes"
+          ],
+          "description": "Storage type of the column."
+        },
+        "nullable": {
+          "type": "boolean",
+          "description": "Whether null values are structurally allowed."
+        }
+      }
+    },
+    "ColumnStats": {
+      "oneOf": [
+        { "$ref": "#/$defs/NumericColumnStats" },
+        { "$ref": "#/$defs/StringColumnStats" },
+        { "$ref": "#/$defs/DatetimeColumnStats" }
+      ]
+    },
+    "NumericColumnStats": {
+      "description": "Statistics for int* and float* columns.",
+      "type": "object",
+      "required": [
+        "null_count", "null_fraction",
+        "mean", "std", "min", "max",
+        "percentiles", "histogram", "num_unique"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "null_count": { "type": "integer", "minimum": 0 },
+        "null_fraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mean": { "type": "number" },
+        "std": { "type": "number", "minimum": 0 },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "percentiles": {
+          "type": "object",
+          "required": ["p5", "p25", "p50", "p75", "p95", "p99"],
+          "additionalProperties": false,
+          "properties": {
+            "p5":  { "type": "number" },
+            "p25": { "type": "number" },
+            "p50": { "type": "number" },
+            "p75": { "type": "number" },
+            "p95": { "type": "number" },
+            "p99": { "type": "number" }
+          }
+        },
+        "histogram": {
+          "type": "object",
+          "required": ["bin_edges", "counts"],
+          "additionalProperties": false,
+          "properties": {
+            "bin_edges": {
+              "type": "array",
+              "items": { "type": "number" },
+              "description": "Length is num_bins + 1."
+            },
+            "counts": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 0 },
+              "description": "Length is num_bins."
+            }
+          }
+        },
+        "num_unique": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact count if cheap to compute, otherwise a sketch estimate."
+        }
+      }
+    },
+    "StringColumnStats": {
+      "description": "Statistics for string columns.",
+      "type": "object",
+      "required": [
+        "null_count", "null_fraction",
+        "num_unique", "top_values", "top_values_coverage",
+        "avg_char_length", "min_char_length", "max_char_length",
+        "avg_token_count", "min_token_count", "max_token_count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "null_count": { "type": "integer", "minimum": 0 },
+        "null_fraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "num_unique": { "type": "integer", "minimum": 0, "description": "Cardinality." },
+        "top_values": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "description": "Top-K {value: count} pairs (default K=50)."
+        },
+        "top_values_coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fraction of rows covered by the top_values entries."
+        },
+        "avg_char_length": { "type": "number", "minimum": 0 },
+        "min_char_length": { "type": "integer", "minimum": 0 },
+        "max_char_length": { "type": "integer", "minimum": 0 },
+        "avg_token_count": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Whitespace-split token count, averaged over non-null rows."
+        },
+        "min_token_count": { "type": "integer", "minimum": 0 },
+        "max_token_count": { "type": "integer", "minimum": 0 },
+        "detected_languages": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 },
+          "description": "Top detected BCP-47 language codes mapped to their row fraction."
+        }
+      }
+    },
+    "DatetimeColumnStats": {
+      "description": "Statistics for datetime64 columns.",
+      "type": "object",
+      "required": ["null_count", "null_fraction", "min", "max", "range_days"],
+      "additionalProperties": false,
+      "properties": {
+        "null_count": { "type": "integer", "minimum": 0 },
+        "null_fraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "min": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 lower boundary."
+        },
+        "max": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 upper boundary."
+        },
+        "range_days": {
+          "type": "number",
+          "minimum": 0,
+          "description": "(max - min) expressed in days."
+        }
+      }
+    }
+  }
+}

@@ -41,7 +41,7 @@ Snapshots should contain the following semantic dataset information in each snap
 Each entry in `columns` contains:
 
 - `name`: column identifier.
-- `dtype`: storage type (`int64`, `float32`, `string`, `bool`, `datetime64`, `bytes`, etc.).
+- `dtype`: storage type (`int64`, `float32`, `string`, `bool`, `datetime64`, `bytes`).
 - `nullable`: whether null values are structurally allowed.
 
 ### Volume
@@ -75,12 +75,6 @@ Stored under `column_stats[<name>]` for each column.
 - `null_count`, `null_fraction`.
 - `min`, `max`: ISO-8601 boundaries.
 - `range_days`: `(max - min)` in days.
-
-**For embedding / vector columns**:
-
-- `null_count`, `null_fraction`.
-- `dim`: vector dimensionality.
-- `norm_mean`, `norm_std`: statistics of L2 norms.
 
 ### Data Quality Signals
 | Field | Description |

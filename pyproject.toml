@@ -101,5 +101,6 @@ skip = "*.lock,*.csv,*.parquet,./data,./datasets"
 
 [dependency-groups]
 dev = [
+    "jsonschema>=4.26.0",
     "zensical>=0.0.45",
 ]
