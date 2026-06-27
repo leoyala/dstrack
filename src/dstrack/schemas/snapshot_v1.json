@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/leoyala/dstrack/schemas/snapshot/v1.json",
+  "$id": "https://github.com/leoyala/dstrack/schemas/snapshot_v1.json",
   "title": "DatasetSnapshot",
   "description": "A dstrack dataset snapshot. Captures semantic information about a tabular dataset at a point in time. See ADR-0001.",
   "type": "object",
@@ -94,7 +94,7 @@
     "column_stats": {
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/ColumnStats" },
-      "description": "Per-column statistics keyed by column name. The concrete shape depends on the column dtype; consumers must branch on the corresponding entry in `columns`."
+      "description": "Per-column statistics keyed by column name. The concrete shape depends on the column dtype; users must branch on the corresponding entry in `columns`."
     },
     "duplicate_row_fraction": {
       "type": "number",
