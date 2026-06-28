@@ -355,3 +355,28 @@ combine_header_slug = true
 [project.markdown_extensions.pymdownx.tasklist]
 custom_checkbox = true
 [project.markdown_extensions.pymdownx.tilde]
+
+
+# ----------------------------------------------------------------------------
+# Custom plugins
+# ----------------------------------------------------------------------------
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+inherited_members = true
+show_source = false
+summary = true
+parameter_headings = false
+signature_crossrefs = true
+relative_crossrefs = true
+scoped_crossrefs = false
+show_root_heading = true
+show_root_full_path = false
+show_symbol_type_heading = true
+show_symbol_type_toc = true
+merge_init_into_class = true
+show_inheritance_diagram = true

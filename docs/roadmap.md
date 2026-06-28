@@ -20,8 +20,8 @@ Foundation tooling: packaging, linting, type checking, CI/CD, and release automa
 Foundation for all future capabilities: reading a dataset and capturing an immutable record of its state.
 
 - [ ] Local snapshot store
-- [ ] CSV support (no extra dependencies)
-- [ ] Content fingerprinting (deterministic, format-agnostic)
+- [x] CSV support (no extra dependencies)
+- [x] Content fingerprinting (deterministic, format-agnostic)
 - [ ] Schema extraction (column names and types)
 - [ ] Per-column statistics (counts, ranges, null rates, etc.)
 - [ ] `dstrack init` and `dstrack snapshot` commands
