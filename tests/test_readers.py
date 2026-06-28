@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import pytest
@@ -224,6 +225,7 @@ def test_raise_when_file_is_modified(tmp_path: Path) -> None:
         delimiter=";",
     )
     _ = reader.columns()
+    time.sleep(0.02)
     write_csv(tmp_path, "semi.csv", "a;b\n1;2\n3;4\n")
     with pytest.raises(RuntimeError):
         _ = list(reader.iter_batches())

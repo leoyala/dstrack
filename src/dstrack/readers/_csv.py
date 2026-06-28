@@ -100,6 +100,16 @@ class CsvReader:
     `RuntimeError` if the file has changed, preventing silent
     schema/data mismatches.
 
+    Note:
+        Change detection relies on ``mtime_ns`` and file size reported by the
+        OS.  On filesystems with coarse modification-time resolution (FAT32,
+        some network or CI mounts), two writes that happen within the same
+        clock tick will share the same ``mtime_ns``, so a modification that
+        also preserves the file size may go undetected.  If you need
+        guaranteed detection in such environments, ensure at least one clock
+        tick (≥ 10 ms on most systems) elapses between calling
+        [columns()][dstrack.readers.CsvReader.columns] and overwriting the file.
+
     Args:
         path: Path to the CSV file.
         sample_rows: Number of rows to read for dtype inference.
