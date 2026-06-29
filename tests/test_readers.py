@@ -87,9 +87,13 @@ def test_column_order_preserved(tmp_path: Path) -> None:
 
 
 def test_columns_cached(tmp_path: Path) -> None:
-    """Repeated calls to columns() return the exact same object (not recomputed)."""
+    """Repeated calls to columns() does not recompute columns internally."""
     reader = CsvReader(write_csv(tmp_path, "cached.csv", "a\n1\n"))
-    assert reader.columns() is reader.columns()
+    _ = reader.columns()
+    cols1 = reader._columns
+    _ = reader.columns()
+    cols2 = reader._columns
+    assert cols1 is cols2
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +230,30 @@ def test_raise_when_file_is_modified(tmp_path: Path) -> None:
     )
     _ = reader.columns()
     time.sleep(0.02)
-    write_csv(tmp_path, "semi.csv", "a;b\n1;2\n3;4\n")
+    write_csv(tmp_path, "semi.csv", "a;b\n1;2\n3;4\n5;6\n")
     with pytest.raises(RuntimeError):
         _ = list(reader.iter_batches())
+
+
+def test_duplicate_headers(tmp_path: Path) -> None:
+    """checks that duplicated headers are handled gracefully."""
+    reader = CsvReader(
+        write_csv(tmp_path, "duplicate_headers.csv", "a;a;b\n1;2;3\n"),
+        rename_duplicates=True,
+        delimiter=";",
+    )
+    cols = [c.name for c in reader.columns()]
+    assert cols == ["a", "a_1", "b"], f"unexpected deduplicated columns: {cols}"
+    assert flat_rows(reader) == [[1, 2, 3]]
+
+
+def test_duplicate_header_raises_error(tmp_path: Path) -> None:
+    """checks that reader raises error when duplicated headers are present
+    but explicint deduplication is not indicated.
+    """
+    reader = CsvReader(
+        write_csv(tmp_path, "duplicate_headers.csv", "a;a;b\n1;2;3\n"), delimiter=";"
+    )
+
+    with pytest.raises(ValueError):
+        _ = reader.columns()

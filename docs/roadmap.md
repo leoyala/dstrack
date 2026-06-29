@@ -21,7 +21,7 @@ Foundation for all future capabilities: reading a dataset and capturing an immut
 
 - [ ] Local snapshot store
 - [x] CSV support (no extra dependencies)
-- [x] Content fingerprinting (deterministic, format-agnostic)
+- [ ] Content fingerprinting (deterministic, format-agnostic)
 - [ ] Schema extraction (column names and types)
 - [ ] Per-column statistics (counts, ranges, null rates, etc.)
 - [ ] `dstrack init` and `dstrack snapshot` commands

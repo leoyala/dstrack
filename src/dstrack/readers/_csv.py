@@ -6,6 +6,31 @@ from typing import Any
 
 from ._protocol import Cell, ColumnInfo
 
+
+def _deduplicate_fieldnames(fieldnames: list[str]) -> list[str]:
+    """Deduplicates strings in list by appending a counter.
+
+    If the list contains repeated values, an int counter is added
+    to the end of the value.
+
+    Args:
+        fieldnames: list of strings to be deduplicated
+
+    Returns:
+        Deduplicated values
+    """
+    seen: dict[str, int] = {}
+    result = []
+    for name in fieldnames:
+        if name not in seen:
+            seen[name] = 0
+            result.append(name)
+        else:
+            seen[name] += 1
+            result.append(f"{name}_{seen[name]}")
+    return result
+
+
 _NULL_PATTERNS: frozenset[str] = frozenset(
     {"", "null", "NULL", "Null", "NaN", "nan", "NA", "N/A", "n/a", "None", "none"}
 )
@@ -83,6 +108,8 @@ def _coerce(raw: str | None, dtype: str) -> Cell:
     if dtype == "float64":
         return float(raw)
     if dtype == "bool":
+        if raw not in _BOOL_ALL:
+            raise ValueError(f"Invalid boolean value for bool column: {raw!r}")
         return raw in _BOOL_TRUE
     # string, datetime64, bytes — keep as str
     return raw
@@ -117,6 +144,9 @@ class CsvReader:
             from them.
         encoding: File encoding passed to :func:`open`.  Defaults to
             ``"utf-8"``; use ``"cp1252"`` or ``"latin-1"`` for Excel exports.
+        rename_duplicates: When ``True``, duplicate header names are made unique
+            by appending a counter suffix (e.g. ``col``, ``col_1``, ``col_2``).
+            When ``False`` (default), a :exc:`ValueError` is raised instead.
         **csv_kwargs: Forwarded verbatim to [DictReader][csv.DictReader]
             (e.g. ``delimiter=";"``, ``quotechar="'"``).
     """
@@ -127,11 +157,13 @@ class CsvReader:
         *,
         sample_rows: int = 200,
         encoding: str = "utf-8",
+        rename_duplicates: bool = False,
         **csv_kwargs: Any,
     ) -> None:
         self._path = Path(path)
         self._sample_rows = sample_rows
         self._encoding = encoding
+        self._rename_duplicates = rename_duplicates
         self._csv_kwargs = csv_kwargs
         self._columns: list[ColumnInfo] | None = None
         self._file_stat: tuple[int, int] | None = None
@@ -149,7 +181,7 @@ class CsvReader:
         """
         if self._columns is None:
             self._columns = self._detect_columns()
-        return self._columns
+        return list(self._columns)
 
     def _detect_columns(self) -> list[ColumnInfo]:
         """Read up to ``sample_rows`` rows and infer a ColumnInfo per field.
@@ -168,6 +200,14 @@ class CsvReader:
             fieldnames = reader.fieldnames
             if not fieldnames:
                 return []
+            if len(set(fieldnames)) != len(fieldnames):
+                if not self._rename_duplicates:
+                    raise ValueError(
+                        "Duplicate CSV headers detected. Pass rename_duplicates=True"
+                        " to automatically rename them (e.g. 'col', 'col_1', 'col_2')."
+                    )
+                fieldnames = _deduplicate_fieldnames(list(fieldnames))
+                reader.fieldnames = fieldnames
             for name in fieldnames:
                 samples[name] = []
             for i, row in enumerate(reader):
@@ -217,6 +257,8 @@ class CsvReader:
                     f"File changed between schema inference and iteration: {self._path}"
                 )
             reader = csv.DictReader(fh, **self._csv_kwargs)
+            _ = reader.fieldnames  # consume header row
+            reader.fieldnames = names
             for row in reader:
                 batch.append(
                     [
