@@ -247,6 +247,20 @@ def test_duplicate_headers(tmp_path: Path) -> None:
     assert flat_rows(reader) == [[1, 2, 3]]
 
 
+def test_duplicate_headers_with_preexisting_suffix(tmp_path: Path) -> None:
+    """Deduplication must not overwrite a pre-existing suffixed header with a generated
+    rename. ["a", "a", "a_1"] must become ["a", "a_2", "a_1"], not ["a", "a_1", "a_1_1"],
+    so the explicitly-named column keeps its identity and no data is silently dropped."""
+    reader = CsvReader(
+        write_csv(tmp_path, "pre_suffix.csv", "a;a;a_1\n1;2;3\n"),
+        rename_duplicates=True,
+        delimiter=";",
+    )
+    cols = [c.name for c in reader.columns()]
+    assert cols == ["a", "a_2", "a_1"], f"unexpected deduplicated columns: {cols}"
+    assert flat_rows(reader) == [[1, 2, 3]]
+
+
 def test_duplicate_header_raises_error(tmp_path: Path) -> None:
     """checks that reader raises error when duplicated headers are present
     but explicint deduplication is not indicated.

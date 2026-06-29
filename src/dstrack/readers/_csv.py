@@ -1,5 +1,6 @@
 import csv
 import os
+from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -13,21 +14,30 @@ def _deduplicate_fieldnames(fieldnames: list[str]) -> list[str]:
     If the list contains repeated values, an int counter is added
     to the end of the value.
 
+    Names that appear exactly once are treated as reserved: generated suffixes
+    will never claim them.  For example, ``["a", "a", "a_1"]`` becomes
+    ``["a", "a_2", "a_1"]`` rather than ``["a", "a_1", "a_1_1"]``.
+
     Args:
         fieldnames: list of strings to be deduplicated
 
     Returns:
         Deduplicated values
     """
+    counts = Counter(fieldnames)
+    reserved = {name for name, count in counts.items() if count == 1}
     seen: dict[str, int] = {}
+    used: set[str] = set()
     result = []
     for name in fieldnames:
-        if name not in seen:
-            seen[name] = 0
-            result.append(name)
-        else:
-            seen[name] += 1
-            result.append(f"{name}_{seen[name]}")
+        candidate = name
+        suffix = seen.get(name, 1)
+        while candidate in used or (candidate != name and candidate in reserved):
+            candidate = f"{name}_{suffix}"
+            suffix += 1
+        seen[name] = suffix
+        used.add(candidate)
+        result.append(candidate)
     return result
 
 
@@ -146,6 +156,9 @@ class CsvReader:
             ``"utf-8"``; use ``"cp1252"`` or ``"latin-1"`` for Excel exports.
         rename_duplicates: When ``True``, duplicate header names are made unique
             by appending a counter suffix (e.g. ``col``, ``col_1``, ``col_2``).
+            Headers that already appear exactly once in the file are treated as
+            reserved: generated suffixes will never overwrite them (e.g.
+            ``["a", "a", "a_1"]`` → ``["a", "a_2", "a_1"]``).
             When ``False`` (default), a :exc:`ValueError` is raised instead.
         column_dtypes: Optional mapping of column name to dtype string that
             overrides the inferred dtype for those columns.  Only the listed
