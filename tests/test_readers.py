@@ -257,3 +257,52 @@ def test_duplicate_header_raises_error(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         _ = reader.columns()
+
+
+# ---------------------------------------------------------------------------
+# column_dtypes override
+# ---------------------------------------------------------------------------
+
+
+def test_column_dtypes_overrides_inferred_dtype(tmp_path: Path) -> None:
+    """column_dtypes forces the specified dtype, bypassing inference."""
+    content = "id,value\n1,42\n2,99\n"
+    reader = CsvReader(
+        write_csv(tmp_path, "override.csv", content),
+        column_dtypes={"id": "string"},
+    )
+    by_name = {c.name: c for c in reader.columns()}
+    assert by_name["id"].dtype == "string"
+    assert by_name["value"].dtype == "int64"
+
+
+def test_column_dtypes_override_reflected_in_row_values(tmp_path: Path) -> None:
+    """Rows for an overridden column contain values of the overridden type."""
+    content = "id,score\n1,1.5\n2,2.7\n"
+    reader = CsvReader(
+        write_csv(tmp_path, "override_rows.csv", content),
+        column_dtypes={"id": "string"},
+    )
+    rows = flat_rows(reader)
+    assert rows[0] == ["1", 1.5]
+    assert rows[1] == ["2", 2.7]
+
+
+def test_column_dtypes_only_affects_named_columns(tmp_path: Path) -> None:
+    """Columns not listed in column_dtypes are still inferred normally."""
+    content = "a,b,c\n1,2.5,true\n2,3.1,false\n"
+    reader = CsvReader(
+        write_csv(tmp_path, "partial_override.csv", content),
+        column_dtypes={"a": "string"},
+    )
+    by_name = {c.name: c for c in reader.columns()}
+    assert by_name["a"].dtype == "string"
+    assert by_name["b"].dtype == "float64"
+    assert by_name["c"].dtype == "bool"
+
+
+def test_bytes_dtype_override_raises_value_error(tmp_path: Path) -> None:
+    """Passing 'bytes' in column_dtypes raises ValueError at construction time."""
+    path = write_csv(tmp_path, "bytes.csv", "data\nhello\n")
+    with pytest.raises(ValueError, match="bytes"):
+        CsvReader(path, column_dtypes={"data": "bytes"})

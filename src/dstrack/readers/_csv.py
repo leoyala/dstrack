@@ -147,6 +147,11 @@ class CsvReader:
         rename_duplicates: When ``True``, duplicate header names are made unique
             by appending a counter suffix (e.g. ``col``, ``col_1``, ``col_2``).
             When ``False`` (default), a :exc:`ValueError` is raised instead.
+        column_dtypes: Optional mapping of column name to dtype string that
+            overrides the inferred dtype for those columns.  Only the listed
+            columns are affected; all others are still inferred automatically.
+            ``"bytes"`` is not a valid override (see ADR-0002); passing it
+            raises `ValueError`.
         **csv_kwargs: Forwarded verbatim to [DictReader][csv.DictReader]
             (e.g. ``delimiter=";"``, ``quotechar="'"``).
     """
@@ -158,12 +163,22 @@ class CsvReader:
         sample_rows: int = 200,
         encoding: str = "utf-8",
         rename_duplicates: bool = False,
+        column_dtypes: dict[str, str] | None = None,
         **csv_kwargs: Any,
     ) -> None:
+        if column_dtypes:
+            bad = [name for name, dt in column_dtypes.items() if dt == "bytes"]
+            if bad:
+                raise ValueError(
+                    f"'bytes' dtype is not supported by CsvReader (column(s): {bad}). "
+                    "Keep the column as 'string' and decode in application code. "
+                    "See ADR-0002."
+                )
         self._path = Path(path)
         self._sample_rows = sample_rows
         self._encoding = encoding
         self._rename_duplicates = rename_duplicates
+        self._column_dtypes = column_dtypes or {}
         self._csv_kwargs = csv_kwargs
         self._columns: list[ColumnInfo] | None = None
         self._file_stat: tuple[int, int] | None = None
@@ -220,7 +235,7 @@ class CsvReader:
         return [
             ColumnInfo(
                 name=name,
-                dtype=_infer_dtype(vals),
+                dtype=self._column_dtypes.get(name) or _infer_dtype(vals),
                 nullable=any(v in _NULL_PATTERNS for v in vals),
             )
             for name, vals in samples.items()
