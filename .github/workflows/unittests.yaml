@@ -27,7 +27,7 @@ jobs:
       - name: Install the project
         run: uv sync --locked --all-extras --dev
       - name: Run pytests
-        run: uv run --frozen pytest --junit-xml pytest.xml
+        run: uv run --frozen pytest --cov=dstrack --cov-report=xml --junit-xml pytest.xml
       - name: Run doctests
         run: uv run --frozen pytest --doctest-modules --doctest-continue-on-failure src/dstrack --junit-xml doctest.xml
       - name: Upload Test Results
@@ -38,6 +38,15 @@ jobs:
           path: |
             pytest.xml
             doctest.xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: ${{ matrix.os }}-py${{ matrix.python-version }}
+          name: ${{ matrix.os }}-py${{ matrix.python-version }}
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
   publish-test-results:
     name: "Publish Tests Results"
     needs: test

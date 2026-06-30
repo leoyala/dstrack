@@ -1,5 +1,8 @@
 # dstrack
 
+[![Unit Tests](https://github.com/leoyala/dstrack/actions/workflows/unittests.yaml/badge.svg)](https://github.com/leoyala/dstrack/actions/workflows/unittests.yaml)
+[![codecov](https://codecov.io/github/leoyala/dstrack/graph/badge.svg?token=DEKCE4LR88)](https://codecov.io/github/leoyala/dstrack)
+
 <p align="center">
   <img src="docs/assets/dstrack-logo.png" width="200" alt="dstrack logo">
 </p>
