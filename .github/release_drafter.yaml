@@ -15,7 +15,9 @@ categories:
         - "bug"
   - title: "🧰 Maintenance"
     when:
-      label: "chore"
+      labels:
+      - "chore"
+      - "Tools"
   - type: "pre-exclude"
     when:
       label: "skip-changelog"
