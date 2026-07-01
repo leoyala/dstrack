@@ -1,4 +1,5 @@
 import csv
+import logging
 import os
 from collections import Counter
 from collections.abc import Iterator
@@ -6,6 +7,17 @@ from pathlib import Path
 from typing import Any
 
 from ._protocol import Cell, ColumnInfo
+
+logger = logging.getLogger(__name__)
+
+
+_NULL_PATTERNS: frozenset[str] = frozenset(
+    {"", "null", "NULL", "Null", "NaN", "nan", "NA", "N/A", "n/a", "None", "none"}
+)
+_BOOL_TRUE: frozenset[str] = frozenset({"true", "True", "TRUE"})
+_BOOL_ALL: frozenset[str] = frozenset(
+    {"true", "True", "TRUE", "false", "False", "FALSE"}
+)
 
 
 def _deduplicate_fieldnames(fieldnames: list[str]) -> list[str]:
@@ -39,15 +51,6 @@ def _deduplicate_fieldnames(fieldnames: list[str]) -> list[str]:
         used.add(candidate)
         result.append(candidate)
     return result
-
-
-_NULL_PATTERNS: frozenset[str] = frozenset(
-    {"", "null", "NULL", "Null", "NaN", "nan", "NA", "N/A", "n/a", "None", "none"}
-)
-_BOOL_TRUE: frozenset[str] = frozenset({"true", "True", "TRUE"})
-_BOOL_ALL: frozenset[str] = frozenset(
-    {"true", "True", "TRUE", "false", "False", "FALSE"}
-)
 
 
 def _looks_like_datetime(value: str) -> bool:
@@ -220,6 +223,9 @@ class CsvReader:
         Returns:
             Ordered list of [ColumnInfo][dstrack.readers.ColumnInfo] objects, one per CSV field.
         """
+        logger.debug(
+            f"Inferring column dtypes for {self._path} from up to {self._sample_rows} sample rows",
+        )
         samples: dict[str, list[str]] = {}
         with self._path.open(newline="", encoding=self._encoding) as fh:
             stat = os.fstat(fh.fileno())
@@ -245,7 +251,7 @@ class CsvReader:
                     raw = row.get(name)
                     samples[name].append("" if raw is None else raw)
 
-        return [
+        columns = [
             ColumnInfo(
                 name=name,
                 dtype=self._column_dtypes.get(name) or _infer_dtype(vals),
@@ -253,6 +259,8 @@ class CsvReader:
             )
             for name, vals in samples.items()
         ]
+        logger.debug(f"Inferred {len(columns)} columns for {self._path}")
+        return columns
 
     def iter_batches(self, batch_size: int = 1000) -> Iterator[list[list[Cell]]]:
         """Yield batches of coerced rows.
