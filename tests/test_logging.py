@@ -44,8 +44,12 @@ def test_configure_default_logging_is_idempotent() -> None:
     logging entirely.
     """
     before = len(logger.handlers)
+    before_handlers = logger.handlers
     dstrack_logging._configure_default_logging()
     assert len(logger.handlers) == before
+    assert all(
+        h1 is h2 for h1, h2 in zip(before_handlers, logger.handlers, strict=True)
+    )
 
 
 # ---------------------------------------------------------------------------
