@@ -3,7 +3,8 @@ name = "dstrack"
 version = "0.1.0"
 description = "A Python package for versioning and monitoring dataset changes throughout the machine learning lifecycle."
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Leonardo Ayala" }
 ]
