@@ -41,7 +41,14 @@ def _configure_default_logging() -> None:
     Called once, at import time. The handler installed here checks, on every
     record, whether the application has since configured logging itself and
     stays silent if so, see :meth:`_DefaultHandler.emit`.
+
+    A no-op if a :class:`_DefaultHandler` is already attached: since two of
+    them would each treat the other as an application-supplied handler and
+    both step aside, re-running this (e.g. via ``importlib.reload`` under
+    Jupyter's autoreload) would otherwise silence dstrack's logging entirely.
     """
+    if any(isinstance(h, _DefaultHandler) for h in logger.handlers):
+        return
     handler = _DefaultHandler()
     handler.setFormatter(logging.Formatter(_FORMAT))
     logger.addHandler(handler)
