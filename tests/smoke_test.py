@@ -8,10 +8,12 @@ import sys
 
 
 def test_import() -> None:
+    """Check that dstrack is importable."""
     import dstrack  # noqa: F401
 
 
 def test_version() -> None:
+    """check that package version is accessible from imported package."""
     import dstrack
 
     assert isinstance(dstrack.__version__, str) and dstrack.__version__, (
@@ -20,11 +22,13 @@ def test_version() -> None:
 
 
 def test_cli_entry_point() -> None:
-    # Verifies the entry point function is importable and callable (the script
-    # wiring in pyproject.toml points here).
-    from dstrack import main
+    """Verifies the CLI app is importable and runs."""
+    from typer.testing import CliRunner
 
-    main()
+    from dstrack._cli import app
+
+    result = CliRunner().invoke(app, ["version"])
+    assert result.exit_code == 0, result.output
 
 
 if __name__ == "__main__":

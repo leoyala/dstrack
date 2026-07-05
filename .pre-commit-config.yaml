@@ -91,6 +91,7 @@ repos:
       - id: mypy
         files: ^src/
         args: [--ignore-missing-imports, --install-types, --non-interactive]
+        additional_dependencies: [typer>=0.26.8]
 
   # ---------------------------------------------------------------------------
   # Spelling: catches typos in code, docstrings, and docs.
