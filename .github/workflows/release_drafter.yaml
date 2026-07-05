@@ -13,5 +13,3 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: release-drafter/release-drafter@v7
-        with:
-          config-name: release-drafter.yml # the default, loads '.github/release-drafter.yml'
