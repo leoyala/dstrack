@@ -17,7 +17,7 @@ categories:
     when:
       labels:
       - "chore"
-      - "Tools"
+      - "tools"
   - type: "pre-exclude"
     when:
       label: "skip-changelog"
