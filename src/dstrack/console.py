@@ -11,17 +11,17 @@ console = Console()
 
 def success(message: str) -> None:
     """Print a success message prefixed with a check mark."""
-    console.print(f"[bold green]✔[/bold green] {message}")
+    console.print(f"[bold green]\N{HEAVY CHECK MARK}[/bold green] {message}")
 
 
 def warning(message: str) -> None:
     """Print a warning message prefixed with a lightning bolt."""
-    console.print(f"[bold yellow]⚡[/bold yellow] {message}")
+    console.print(f"[bold yellow]\N{HIGH VOLTAGE SIGN}[/bold yellow] {message}")
 
 
 def error(message: str) -> None:
     """Print an error message prefixed with a bug icon."""
-    console.print(f"[bold red]\U0001f41b[/bold red] {message}")
+    console.print(f"[bold red]\N{BUG}[/bold red] {message}")
 
 
 def info(message: str) -> None:

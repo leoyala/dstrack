@@ -40,7 +40,6 @@ def _init_local_store_gitignore(path: Path) -> None:
 
     # Create and populate .gitignore file
     console.info("Generating .gitignore file in local store.")
-    file_path.touch()
     with file_path.open("w"):
         file_path.write_text(".cache/")
 
@@ -80,7 +79,7 @@ def init_local_store() -> Path:
 
 @app.command(
     help="Initialize local store before starting to track any dataset. "
-    "The locak store `.dstrack/` is created at the location where this "
+    "The local store `.dstrack/` is created at the location where this "
     "command is called."
 )
 def init(
@@ -92,10 +91,10 @@ def init(
         store_path = init_local_store()
         console.success(f"Finished creating local store: {store_path}")
     except FileExistsError as e:
-        _log.warning(f"{e}")
         if not allow_exists:
             console.error(str(e))
             raise
+        _log.warning(f"{e}")
         console.warning(f"{e}")
     except StoreInitError as e:
         _log.error(f"Failed to create local store. {e}")

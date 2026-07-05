@@ -159,3 +159,18 @@ def test_version_command_prints_version() -> None:
 
     assert result.exit_code == 0
     assert result.output.strip() == __version__
+
+
+# ---------------------------------------------------------------------------
+# `app` entry point (no subcommand)
+# ---------------------------------------------------------------------------
+
+
+def test_main_with_no_args_prints_help() -> None:
+    """Invoking the CLI with no subcommand shows help instead of erroring silently."""
+    result = runner.invoke(app, [])
+
+    assert result.exit_code != 0
+    assert "Usage" in result.output
+    assert "init" in result.output
+    assert "version" in result.output
