@@ -89,7 +89,7 @@ Two different jobs need two different mechanisms:
 `log.jsonl` is the fix for both, and is committed to git. Every `dstrack snapshot` call
 writes the full snapshot JSON, appends one line to `log.jsonl` with only the lightweight
 identity fields (`snapshot_id`, `parent_snapshot_id`, `created_at`, `created_by`,
-`dataset_name`, `dataset_path`, `description`, `pipeline_stage`, `tags`, `num_rows`,
+`dataset_name`, `dataset_path`, `description`, `tags`, `num_rows`,
 `num_columns`), and atomically updates `HEAD`, all three as one operation, so they can
 never drift apart.
 Anyone who clones or pulls the repo has identical, correct history immediately, with no
@@ -97,10 +97,13 @@ rebuild step.
 
 `cache/index.db` (SQLite, stdlib `sqlite3`, no new dependency) is a pure performance
 accelerator for cross-dataset search, built by reading the small `log.jsonl` files,
-never the heavy snapshot JSON. It is **not** a second source of truth: it is gitignored,
-safe to delete at any time, and rebuilt on demand (`dstrack reindex`, or lazily on first
-use) purely from committed data. Its absence, staleness, or divergence between two
-machines can only make a search slower, never incorrect.
+never the heavy snapshot JSON. It is **not** a second source of truth: it is gitignored
+and safe to delete at any time. Every `dstrack snapshot` call appends its new row
+straight to the index, and every `dstrack search` also stats each dataset's `log.jsonl`
+first and re-syncs any lines it's missing (size/mtime tracked per dataset), so
+first-use, deletion, and pulls from other machines are all covered too. Between the
+two, a search can never see stale results, only, in the worst case, a slower one while
+it resyncs.
 
 ### Path resolution: relative, root-overridable, never a shared pointer
 Every snapshot's `dataset_path` (ADR-0001) is stored relative to a *path root*, always
@@ -182,7 +185,7 @@ root (`data/train.csv`), and creates:
 ```
 
 ```json title="log.jsonl"
-{"snapshot_id":"8f14e45f-ceea-4c6a-8f31-8b0e2e1a9c3f","parent_snapshot_id":null,"created_at":"2026-07-01T14:03:22Z","dataset_name":"Customer Churn","dataset_path":"data/train.csv","num_rows":50231,"num_columns":12}
+{"snapshot_id":"8f14e45f-ceea-4c6a-8f31-8b0e2e1a9c3f","parent_snapshot_id":null,"created_at":"2026-07-01T14:03:22Z","created_by":"user","dataset_name":"Customer Churn","dataset_path":"data/train.csv","description":"Raw customer churn export from CRM", "tags":{"team":"growth"},"num_rows":50231,"num_columns":12}
 ```
 
 Later, `data/train.csv` is updated and re-snapshotted, no name needed, since the
