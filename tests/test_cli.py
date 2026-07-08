@@ -12,28 +12,6 @@ from dstrack.errors import StoreInitError
 runner = CliRunner()
 
 # ---------------------------------------------------------------------------
-# _init_local_store_gitignore
-# ---------------------------------------------------------------------------
-
-
-def test_init_local_store_gitignore_creates_file(tmp_path: Path) -> None:
-    """Writes a .gitignore file that ignores the cache directory."""
-    _cli._init_local_store_gitignore(tmp_path)
-
-    gitignore = tmp_path / ".gitignore"
-    assert gitignore.is_file()
-    assert gitignore.read_text() == ".cache/"
-
-
-def test_init_local_store_gitignore_raises_if_exists(tmp_path: Path) -> None:
-    """Refuses to overwrite an already-existing .gitignore file."""
-    (tmp_path / ".gitignore").write_text("existing content")
-
-    with pytest.raises(FileExistsError):
-        _cli._init_local_store_gitignore(tmp_path)
-
-
-# ---------------------------------------------------------------------------
 # init_local_store
 # ---------------------------------------------------------------------------
 
@@ -63,25 +41,53 @@ def test_init_local_store_raises_if_store_exists(
         init_local_store()
 
 
-def test_init_local_store_rolls_back_on_gitignore_failure(
+def test_init_local_store_rolls_back_on_template_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Removes the partially created store and raises StoreInitError.
+    """Raises StoreInitError and leaves no trace if building the template fails.
 
-    if writing the .gitignore file fails partway through.
+    partway through. Since the store is built in a temporary directory
+    first, the destination path should never even be created.
     """
     monkeypatch.chdir(tmp_path)
 
-    def _boom(path: Path) -> None:
+    def _boom(template: object, parent: Path) -> Path:
         raise RuntimeError("disk on fire")
 
-    monkeypatch.setattr(_cli, "_init_local_store_gitignore", _boom)
+    monkeypatch.setattr(_cli, "materialize", _boom)
 
     with pytest.raises(StoreInitError) as exc_info:
         init_local_store()
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)
     assert not (tmp_path / ".dstrack").exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_init_local_store_does_not_touch_destination_until_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Builds the store fully in a temp dir before moving it into place.
+
+    at the moment the template is materialized, the final destination
+    must not exist yet.
+    """
+    monkeypatch.chdir(tmp_path)
+    store_path = tmp_path / ".dstrack"
+
+    from dstrack import _store_template
+
+    original_materialize = _store_template.materialize
+
+    def _check_and_materialize(template: object, parent: Path) -> Path:
+        assert not store_path.exists()
+        return original_materialize(template, parent)
+
+    monkeypatch.setattr(_cli, "materialize", _check_and_materialize)
+
+    init_local_store()
+
+    assert store_path.is_dir()
 
 
 # ---------------------------------------------------------------------------

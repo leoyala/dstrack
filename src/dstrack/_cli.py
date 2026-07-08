@@ -1,11 +1,12 @@
 import logging
-import shutil
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from dstrack import __version__, console
+from dstrack._store_template import STORE_TEMPLATE, materialize
 from dstrack.errors import StoreInitError
 from dstrack.utils import get_invocation_path
 
@@ -20,59 +21,40 @@ app = typer.Typer(
 )
 
 
-def _init_local_store_gitignore(path: Path) -> None:
-    """Create .gitignore file in provided path.
-
-    creates and populates file only if it does not already exists.
-
-    Args:
-        path: Path where .gitignore file should be created.
-
-    Raises:
-        FileExistsError: When .gitignore file already exists in path.
-
-    Returns:
-        None
-    """
-    file_path = path / ".gitignore"
-    if file_path.is_file():
-        raise FileExistsError(f"Store .gitignore file already exists: {file_path}")
-
-    # Create and populate .gitignore file
-    console.info("Generating .gitignore file in local store.")
-    with file_path.open("w"):
-        file_path.write_text(".cache/")
-
-
 def init_local_store() -> Path:
     """Initializes local store structure.
 
-    creates a local store folder called `.dstrack`, a `datasets/` folder
-    within it, and a `.gitignore` file to ignore the cache directory.
+    Builds `STORE_TEMPLATE` (see `_store_template.py`) in a temporary
+    directory next to the destination, and only moves it into place once
+    every file and directory in the template has been created successfully.
+    The destination is therefore never touched by a failed or partial build.
 
     Returns:
         Path where the local store was created.
 
     Raises:
         FileExistsError: If the local store path already exists.
-        StoreInitError: If store creation starts but fails partway through,
-            e.g. because the `.gitignore` file cannot be written. Any
-            partially created state is rolled back before raising.
+        StoreInitError: If building the store from its template fails. The
+            temporary build directory is cleaned up before raising.
     """
-    store_path = get_invocation_path() / ".dstrack"
+    invocation_path = get_invocation_path()
+    store_path = invocation_path / STORE_TEMPLATE.name
 
     if store_path.is_dir():
         raise FileExistsError(f"Local store path already exists: {store_path}")
 
-    # Create local store path
-    store_path.mkdir()
-    try:
-        # Create dataset snapshots path
-        (store_path / "datasets").mkdir()
-        _init_local_store_gitignore(path=store_path)
-    except Exception as e:
-        shutil.rmtree(store_path)
-        raise StoreInitError(f"Failed to initialize local store at {store_path}") from e
+    with tempfile.TemporaryDirectory(
+        prefix=f"{STORE_TEMPLATE.name}-tmp-", dir=invocation_path
+    ) as tmp_dir:
+        try:
+            built_path = materialize(STORE_TEMPLATE, Path(tmp_dir))
+        except Exception as e:
+            raise StoreInitError(
+                f"Failed to initialize local store at {store_path}"
+            ) from e
+
+        console.info(f"Generating local store structure at {store_path}.")
+        built_path.rename(store_path)
 
     return store_path
 
