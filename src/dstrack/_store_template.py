@@ -53,5 +53,6 @@ def materialize(template: TemplateDir, parent: Path) -> Path:
         if isinstance(entry, TemplateDir):
             materialize(entry, path)
         else:
-            (path / entry.name).write_text(entry.content)
+            with open(path / entry.name, "x") as f:
+                f.write(entry.content)
     return path
