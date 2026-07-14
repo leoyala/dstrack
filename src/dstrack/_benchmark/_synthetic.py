@@ -1,10 +1,15 @@
 """Synthetic CSV generation for the benchmark.
 
-The dataset is described by a :class:`SyntheticCsvSpec` value object and
-written by :func:`write_synthetic_csv`.  Each generated dtype is one
-:class:`SyntheticColumn` whose ``generate`` callable renders a single cell, so
-supporting a new dtype means adding one cell factory and one entry to
-``_COLUMN_KINDS`` rather than threading another count through every layer.
+The dataset is described by a
+[SyntheticCsvSpec][dstrack._benchmark._synthetic.SyntheticCsvSpec] value object
+and written by
+[write_synthetic_csv()][dstrack._benchmark._synthetic.write_synthetic_csv].  Each
+generated dtype is one
+[SyntheticColumn][dstrack._benchmark._synthetic.SyntheticColumn] whose
+[generate][dstrack._benchmark._synthetic.SyntheticColumn.generate] callable
+renders a single cell, so supporting a new dtype means adding one cell factory
+and one entry to ``_COLUMN_KINDS`` rather than threading another count through
+every layer.
 """
 
 import csv

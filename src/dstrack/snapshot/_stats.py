@@ -108,8 +108,9 @@ class DatasetStats:
 class _ColumnAcc(Protocol):
     """Common interface every per-column accumulator implements.
 
-    ``compute`` drives all accumulators through this interface so it does not
-    need to branch on column type while scanning rows or building stats.
+    [compute()][dstrack.snapshot._stats.StatsComputer.compute] drives all
+    accumulators through this interface so it does not need to branch on column
+    type while scanning rows or building stats.
     """
 
     null_count: int
@@ -232,10 +233,12 @@ class StatsComputer:
         """Run a full data pass and return aggregated statistics.
 
         Args:
-            reader: Any TabularReader whose batches will be consumed once.
+            reader: Any [TabularReader][dstrack.readers._protocol.TabularReader]
+                whose batches will be consumed once.
 
         Returns:
-            A populated :class:`DatasetStats` instance.
+            A populated [DatasetStats][dstrack.snapshot._stats.DatasetStats]
+                instance.
         """
         cols = reader.columns()
         col_names = [c.name for c in cols]

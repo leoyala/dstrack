@@ -6,19 +6,19 @@ the environment the benchmark ran in and a call tree of dstrack's own methods.
 
 Layers
 ------
-:mod:`._synthetic`
+[dstrack._benchmark._synthetic][]
     Describes and writes the synthetic dataset.
 
-:mod:`._runner`
+[dstrack._benchmark._runner][]
     Runs the snapshot pipeline against it and times each phase.
 
-:mod:`._profiling`
+[dstrack._benchmark._profiling][]
     Reduces the ``cProfile`` run to a call tree of dstrack's own methods.
 
-:mod:`._environment`
+[dstrack._benchmark._environment][]
     Describes the machine the benchmark ran on.
 
-:mod:`._report`, :mod:`._cli`
+[dstrack._benchmark._report][], [dstrack._benchmark._cli][]
     Render runs to a console, and wire the whole thing to ``dstrack-benchmark``.
 """
 

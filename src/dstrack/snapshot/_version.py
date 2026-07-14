@@ -1,7 +1,8 @@
 """Single source of truth for the snapshot format version.
 
-Bump ``FORMAT_VERSION`` and ``SCHEMA_PATH`` together whenever
-``SnapshotMetadata``'s shape changes.
+Bump [FORMAT_VERSION][dstrack.snapshot._version.FORMAT_VERSION] and
+[SCHEMA_PATH][dstrack.snapshot._version.SCHEMA_PATH] together whenever
+[SnapshotMetadata][dstrack.snapshot._metadata.SnapshotMetadata]'s shape changes.
 """
 
 from pathlib import Path

@@ -2,12 +2,12 @@
 
 Built-in readers
 ----------------
-[CsvReader][dstrack.readers.CsvReader] - reads ``.csv`` files; no extra dependencies.
+[CsvReader][dstrack.readers._csv.CsvReader] - reads ``.csv`` files; no extra dependencies.
 
 Extending
 ---------
-Implement [TabularReader][dstrack.readers.TabularReader] on any class to create a
-custom reader. That alone is enough to build a snapshot from Python:
+Implement [TabularReader][dstrack.readers._protocol.TabularReader] on any class to
+create a custom reader. That alone is enough to build a snapshot from Python:
 
 Examples:
     ```python

@@ -1,8 +1,10 @@
-"""Selection and loading of a :class:`TabularReader` for a given source.
+"""Selection and loading of a reader for a given source.
 
-A reader is chosen one of three ways, in order of how much the user has to type:
+A [TabularReader][dstrack.readers._protocol.TabularReader] is chosen one of three
+ways, in order of how much the user has to type:
 
-1. Implicitly, from the source file's extension (``data.csv`` -> `CsvReader`).
+1. Implicitly, from the source file's extension (``data.csv`` ->
+   [CsvReader][dstrack.readers._csv.CsvReader]).
    Plugin readers registered through the ``dstrack.readers`` entry-point group
    participate here too, so an installed reader needs nothing on the command line.
 2. By short name (``"csv"``), for when the extension is absent or misleading.
@@ -126,7 +128,7 @@ def resolve_reader(path: str | Path, *, reader: str | None = None) -> TabularRea
 
     Returns:
         An instantiated reader satisfying
-        [TabularReader][dstrack.readers.TabularReader].
+        [TabularReader][dstrack.readers._protocol.TabularReader].
 
     Raises:
         ValueError: If ``reader`` names nothing known, a spec is malformed, or

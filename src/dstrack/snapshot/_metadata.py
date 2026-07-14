@@ -61,7 +61,9 @@ class MetadataBuilder:
         written by the CLI.
 
         Args:
-            reader: Any TabularReader; only ``columns()`` is called.
+            reader: Any [TabularReader][dstrack.readers._protocol.TabularReader];
+                only [columns()][dstrack.readers._protocol.TabularReader.columns]
+                is called.
             dataset_name: Human-readable dataset name stored in the snapshot.
             dataset_path: Source path or URI at snapshot time, recorded in the
                 snapshot as a forward-slash string.  Never opened.
@@ -75,7 +77,9 @@ class MetadataBuilder:
                 is computed automatically.
 
         Returns:
-            A populated :class:`SnapshotMetadata` instance.
+            A populated
+                [SnapshotMetadata][dstrack.snapshot._metadata.SnapshotMetadata]
+                instance.
         """
         cols = reader.columns()
         # Recorded with forward slashes so a store written on Windows still

@@ -1,8 +1,8 @@
 """Reduces a ``cProfile`` run to a call tree of dstrack's own methods.
 
 This module is pure model: it turns raw ``pstats`` frames into
-:class:`CallNode` trees and knows nothing about how they are displayed.
-Rendering lives in :mod:`dstrack._benchmark._report`.
+[CallNode][dstrack._benchmark._profiling.CallNode] trees and knows nothing about
+how they are displayed. Rendering lives in [dstrack._benchmark._report][].
 """
 
 import cProfile
@@ -91,9 +91,9 @@ class CallGraph:
 
     ``pstats`` records, for every frame, the frames that called it.  This
     inverts those edges so a method that calls other in-scope methods (e.g.
-    ``StatsComputer.compute`` calling ``_build_dataset_stats``) becomes their
-    parent, then projects the result into trees rooted at the methods nothing
-    in scope called.
+    [StatsComputer.compute()][dstrack.snapshot._stats.StatsComputer.compute]
+    calling ``_build_dataset_stats``) becomes their parent, then projects the
+    result into trees rooted at the methods nothing in scope called.
     """
 
     _scope: CallScope

@@ -2,15 +2,19 @@
 
 Classes
 -------
-:class:`MetadataBuilder`
+[SnapshotBuilder][dstrack.snapshot._builder.SnapshotBuilder]
+    Builds a complete snapshot from a single reader, combining the two below.
+
+[MetadataBuilder][dstrack.snapshot._metadata.MetadataBuilder]
     Builds identity and structural snapshot fields from a reader's schema.
 
-:class:`StatsComputer`
+[StatsComputer][dstrack.snapshot._stats.StatsComputer]
     Computes per-column and dataset-level statistics in a single data pass.
 
 Result types
 ------------
-:class:`SnapshotMetadata`, :class:`DatasetStats`
+[SnapshotMetadata][dstrack.snapshot._metadata.SnapshotMetadata],
+[DatasetStats][dstrack.snapshot._stats.DatasetStats]
 """
 
 from ._builder import SnapshotBuilder, build_snapshot_dict

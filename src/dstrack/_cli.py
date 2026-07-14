@@ -25,9 +25,9 @@ app = typer.Typer(
 def init_local_store() -> Path:
     """Initializes local store structure.
 
-    Builds `STORE_TEMPLATE` (see `_store_template.py`) in a temporary
-    directory next to the destination, and only moves it into place once
-    every file and directory in the template has been created successfully.
+    Builds [STORE_TEMPLATE][dstrack._store_template.STORE_TEMPLATE] in a
+    temporary directory next to the destination, and only moves it into place
+    once every file and directory in the template has been created successfully.
     The destination is therefore never touched by a failed or partial build.
 
     Returns:

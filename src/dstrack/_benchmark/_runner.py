@@ -1,9 +1,10 @@
 """Runs the snapshot pipeline against a synthetic CSV and times each phase.
 
 The runner performs no output of its own: progress is announced through a
-:class:`BenchmarkObserver` and everything measured is returned as a
-:class:`BenchmarkRun`, so the same run can be driven from a test with no
-console attached.
+[BenchmarkObserver][dstrack._benchmark._runner.BenchmarkObserver] and everything
+measured is returned as a
+[BenchmarkRun][dstrack._benchmark._runner.BenchmarkRun], so the same run can be
+driven from a test with no console attached.
 """
 
 import cProfile

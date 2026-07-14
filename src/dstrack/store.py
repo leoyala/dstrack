@@ -70,7 +70,7 @@ def write_snapshot(
 
     Args:
         snapshot: A snapshot dict as produced by
-            [SnapshotBuilder][dstrack.snapshot.SnapshotBuilder]. Must contain
+            [SnapshotBuilder][dstrack.snapshot._builder.SnapshotBuilder]. Must contain
             ``snapshot_id`` and ``dataset_path``; ``parent_snapshot_id`` is
             filled in here and overwritten if already present.
         store_root: Path to the ``.dstrack/`` directory, e.g. from

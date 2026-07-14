@@ -1,8 +1,8 @@
 """Renders benchmark runs to a Rich console.
 
 This is the only layer that knows what a benchmark looks like on screen.  It
-implements :class:`~dstrack._benchmark._runner.BenchmarkObserver`, so the same
-object reports progress during a run and the tables after it.
+implements [BenchmarkObserver][dstrack._benchmark._runner.BenchmarkObserver], so
+the same object reports progress during a run and the tables after it.
 """
 
 from pathlib import Path

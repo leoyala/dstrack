@@ -5,18 +5,21 @@ reach it by three different routes, and none of them should have to do the other
 two's work:
 
 - **From Python**, a caller who already has a reader instance hands it straight
-  to `SnapshotBuilder`; the registry is never consulted.
+  to [SnapshotBuilder][dstrack.snapshot._builder.SnapshotBuilder]; the registry
+  is never consulted.
 - **From an installed plugin package**, a reader self-registers through the
   ``dstrack.readers`` entry-point group, so ``dstrack track data.parquet`` infers
   it from the extension with nothing to type.
 - **From an ad-hoc class** in the user's own project, which is not installed as a
   plugin and so is named explicitly as ``"package.module:ClassName"`` (see
-  `_resolve`).
+  [dstrack.readers._resolve][]).
 
 A registered class must satisfy both
-[TabularReader][dstrack.readers.TabularReader] (how it reads) and
-[ReaderFactory][dstrack.readers.ReaderFactory] (how it is built from a path);
-`check_reader_class` enforces that *before* the class is ever instantiated.
+[TabularReader][dstrack.readers._protocol.TabularReader] (how it reads) and
+[ReaderFactory][dstrack.readers._protocol.ReaderFactory] (how it is built from a
+path);
+[check_reader_class()][dstrack.readers._registry.check_reader_class] enforces
+that *before* the class is ever instantiated.
 """
 
 import logging
@@ -59,8 +62,8 @@ def check_reader_class(obj: object, *, origin: str) -> type[TabularReader]:
 
     Raises:
         TypeError: If ``obj`` is not a class, or does not satisfy
-            [TabularReader][dstrack.readers.TabularReader] and
-            [ReaderFactory][dstrack.readers.ReaderFactory].
+            [TabularReader][dstrack.readers._protocol.TabularReader] and
+            [ReaderFactory][dstrack.readers._protocol.ReaderFactory].
     """
     if not isinstance(obj, type):
         raise TypeError(
@@ -90,7 +93,8 @@ def build_reader(reader_cls: type[TabularReader], path: Path) -> TabularReader:
     """Instantiate a validated reader class for ``path``.
 
     Args:
-        reader_cls: A class already validated through `check_reader_class`.
+        reader_cls: A class already validated through
+            [check_reader_class()][dstrack.readers._registry.check_reader_class].
         path: Path to the dataset source.
 
     Returns:
@@ -114,8 +118,9 @@ def register_reader(
     """Register a reader under a short name and the extensions it handles.
 
     Args:
-        reader_cls: The reader class. Must satisfy both `TabularReader` and
-            `ReaderFactory`.
+        reader_cls: The reader class. Must satisfy both
+            [TabularReader][dstrack.readers._protocol.TabularReader] and
+            [ReaderFactory][dstrack.readers._protocol.ReaderFactory].
         name: Short name, as typed for ``--reader`` (e.g. ``"csv"``).
         extensions: Extensions this reader claims, leading dot included. When
             omitted, the class's ``EXTENSIONS`` attribute is used, so a plugin

@@ -1,9 +1,10 @@
 """Describes the machine and runtime a benchmark executed under.
 
 Hardware facts have no portable API, so each is read by a per-OS probe.  Every
-probe is best-effort: it returns ``None`` (or raises, which :func:`_attempt`
-swallows) when the platform will not give up the answer, and the caller falls
-back to something always available.
+probe is best-effort: it returns ``None`` (or raises, which
+[_attempt()][dstrack._benchmark._environment._attempt] swallows) when the
+platform will not give up the answer, and the caller falls back to something
+always available.
 """
 
 import os
