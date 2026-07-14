@@ -1,5 +1,5 @@
 import dataclasses
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from dstrack.readers import TabularReader
@@ -50,7 +50,7 @@ class SnapshotBuilder:
         reader: TabularReader,
         *,
         dataset_name: str,
-        dataset_path: str | Path,
+        dataset_path: str | PurePath,
         created_by: str,
         source_type: str = "file",
         source: str | Path | None = None,
@@ -64,8 +64,9 @@ class SnapshotBuilder:
         Args:
             reader: Any [TabularReader][dstrack.readers._protocol.TabularReader].
             dataset_name: Human-readable dataset name stored in the snapshot.
-            dataset_path: Source path or URI recorded in the snapshot.  Never
-                opened; pass ``source`` when the data lives elsewhere.
+            dataset_path: Source path or URI recorded in the snapshot as a
+                forward-slash string.  Never opened; pass ``source`` when the
+                data lives elsewhere.
             created_by: User or process identifier.
             source_type: Origin kind (``"file"``, ``"directory"``, etc.).
             source: Location the data actually lives at, used only to compute

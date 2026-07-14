@@ -3,7 +3,7 @@
 import hashlib
 import uuid
 from collections.abc import Iterator
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
 
 from dstrack.readers import ColumnInfo, TabularReader
 from dstrack.snapshot import MetadataBuilder, SnapshotMetadata
@@ -27,7 +27,7 @@ def _make_reader(*cols: ColumnInfo) -> TabularReader:
 def _build(
     reader: TabularReader,
     *,
-    path: str | Path = "/data/ds.csv",
+    path: str | PurePath = "/data/ds.csv",
     source: str | Path | None = None,
     source_hash: str | None = None,
 ) -> SnapshotMetadata:
@@ -81,6 +81,12 @@ def test_dataset_path_stored_as_string() -> None:
     """A Path dataset_path is coerced to a string on the built metadata."""
     meta = _build(_make_reader(), path=Path("/some/path/data.csv"))
     assert meta.dataset_path == "/some/path/data.csv"
+
+
+def test_dataset_path_uses_forward_slashes() -> None:
+    """A Windows-flavoured Path is recorded with forward slashes."""
+    meta = _build(_make_reader(), path=PureWindowsPath(r"some\path\data.csv"))
+    assert meta.dataset_path == "some/path/data.csv"
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from dstrack.readers import ColumnInfo, TabularReader
@@ -47,7 +47,7 @@ class MetadataBuilder:
         reader: TabularReader,
         *,
         dataset_name: str,
-        dataset_path: str | Path,
+        dataset_path: str | PurePath,
         source_type: str,
         created_by: str,
         source: str | Path | None = None,
@@ -64,7 +64,7 @@ class MetadataBuilder:
             reader: Any TabularReader; only ``columns()`` is called.
             dataset_name: Human-readable dataset name stored in the snapshot.
             dataset_path: Source path or URI at snapshot time, recorded in the
-                snapshot verbatim.  Never opened.
+                snapshot as a forward-slash string.  Never opened.
             source_type: Origin kind (``"file"``, ``"directory"``, etc.).
             created_by: User or process identifier.
             source: Location the data actually lives at, used only to compute
@@ -78,7 +78,13 @@ class MetadataBuilder:
             A populated :class:`SnapshotMetadata` instance.
         """
         cols = reader.columns()
-        path_str = str(dataset_path)
+        # Recorded with forward slashes so a store written on Windows still
+        # matches the same dataset when read on POSIX, and vice versa.
+        path_str = (
+            dataset_path.as_posix()
+            if isinstance(dataset_path, PurePath)
+            else str(dataset_path)
+        )
 
         if source_hash is None:
             p = Path(source if source is not None else dataset_path)
