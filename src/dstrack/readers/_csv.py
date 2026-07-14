@@ -131,7 +131,7 @@ def _coerce(raw: str | None, dtype: str) -> Cell:
 class CsvReader:
     """Reads a CSV file using the standard-library ``csv`` module.
 
-    Satisfies [TabularReader][dstrack.readers.TabularReader] without inheriting from
+    Satisfies [TabularReader][dstrack.readers._protocol.TabularReader] without inheriting from
     it.  Column dtypes are inferred from the first ``sample_rows`` data rows;
     every subsequent call to [columns()][dstrack.readers.CsvReader.columns] returns the cached result.
 
@@ -171,6 +171,25 @@ class CsvReader:
         **csv_kwargs: Forwarded verbatim to [DictReader][csv.DictReader]
             (e.g. ``delimiter=";"``, ``quotechar="'"``).
     """
+
+    EXTENSIONS = (".csv",)
+
+    @classmethod
+    def from_path(cls, path: str | Path) -> "CsvReader":
+        """Build a reader for ``path`` with default options.
+
+        Satisfies [ReaderFactory][dstrack.readers._protocol.ReaderFactory], which is how
+        the registry and ``--reader`` construct a reader they only know by name.
+        Options other than the path are not reachable this way; construct the
+        reader directly to set them.
+
+        Args:
+            path: Path to the CSV file.
+
+        Returns:
+            A `CsvReader` bound to `path`.
+        """
+        return cls(path)
 
     def __init__(
         self,

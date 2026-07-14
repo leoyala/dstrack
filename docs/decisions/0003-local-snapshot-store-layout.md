@@ -146,12 +146,44 @@ Given `dstrack snapshot <path> [--name NAME] [--root DIR] [--dataset-id ID]`:
      new dataset, `--name` is required, and a new `dataset_id` (UUID4) is minted.
 4. If continuing an existing lineage, read `HEAD` and use it as `parent_snapshot_id`;
    otherwise `parent_snapshot_id` is `null`.
-5. Read the source with the reader inferred from the file extension, compute
+5. Read the source with the reader inferred from the file extension, or with the one
+   named by `--reader` (see [Readers are chosen per invocation, never
+   persisted](#readers-are-chosen-per-invocation-never-persisted) below), compute
    schema/stats/hashes per ADR-0001, and mint a new `snapshot_id` (UUID4).
 6. Write `snapshots/<snapshot_id>.json`, append the corresponding line to `log.jsonl`
    (including `dataset_path`), then atomically replace `HEAD` (write-temp + rename),
    in that order, so a crash never leaves `HEAD` pointing at a snapshot that wasn't
    fully written.
+
+### Readers are chosen per invocation, never persisted
+A reader is resolved fresh on every `dstrack snapshot` call: inferred from the file's
+extension, or named explicitly by `--reader`, which accepts either a registered reader
+name (`--reader csv`) or a `package.module:ClassName` spec that `dstrack` imports
+directly (`--reader mypackage.readers:ExcelReader`).
+
+**The resolved reader is deliberately not part of a snapshot.** No `reader` field is
+written to `snapshots/*.json` or to `log.jsonl`, and nothing in the store is ever read
+back to decide which reader to use. This is a security boundary, not an oversight:
+a `package.module:ClassName` spec is arbitrary import-by-name, which is arbitrary code
+execution. That is perfectly safe as an argument the invoking user typed themselves, and
+it is exactly how gunicorn, uvicorn and celery accept application objects. It stops being
+safe the moment the same string is read from a file, because `.dstrack/` is *committed to
+git* (see [Location](#location)) and therefore travels with the repo. A reader spec stored
+in a snapshot would mean that cloning a repository and running `dstrack snapshot` executes
+an importable path chosen by whoever wrote that commit, turning a pull request into a code
+execution vector on every reviewer's and CI runner's machine.
+
+The rule is therefore: **a reader spec may travel from the user to `dstrack`, never from
+the store to `dstrack`.** Anything that would need a per-dataset default reader must be
+solved another way, by an installed plugin claiming the extension via the
+`dstrack.readers` entry-point group (code the user chose to `pip install`, on the same
+footing as any other dependency), never by resurrecting an import path out of committed
+history.
+
+The cost is real and accepted: a dataset whose extension is not claimed by any installed
+reader needs `--reader` on every invocation, and cannot be made to "just work" for a
+teammate by committing that fact. Publishing or vendoring the reader as a plugin package
+is the supported answer.
 
 ### What's committed vs. local-only
 
@@ -249,3 +281,8 @@ this machine) return the same answer regardless of which machine ran them.
   dataset history; this is an implementation invariant, not just a convention.
 - `cache/index.db` can be deleted at any time with no data loss, only a slower next
   search until it's rebuilt.
+- No reader information is ever written to the store, and no future field may reintroduce
+  it: because `.dstrack/` is committed, an importable path read back out of it would
+  execute code chosen by whoever authored the commit. Readers reach `dstrack` from the
+  invoking user (`--reader`) or from installed plugins, never from committed history. Any
+  proposal for a per-dataset default reader supersedes this ADR rather than extending it.

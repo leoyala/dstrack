@@ -13,6 +13,7 @@ Result types
 :class:`SnapshotMetadata`, :class:`DatasetStats`
 """
 
+from ._builder import SnapshotBuilder, build_snapshot_dict
 from ._metadata import MetadataBuilder, SnapshotMetadata
 from ._stats import (
     DatasetStats,
@@ -33,7 +34,9 @@ __all__ = [
     "NumericColumnStats",
     "OtherColumnStats",
     "PercentileStats",
+    "SnapshotBuilder",
     "SnapshotMetadata",
     "StatsComputer",
     "StringColumnStats",
+    "build_snapshot_dict",
 ]

@@ -50,19 +50,29 @@ class MetadataBuilder:
         dataset_path: str | Path,
         source_type: str,
         created_by: str,
+        source: str | Path | None = None,
         source_hash: str | None = None,
     ) -> SnapshotMetadata:
         """Build metadata for a snapshot.
 
+        ``dataset_path`` is what gets *recorded*; ``source`` is what gets
+        *read*.  They differ whenever the recorded path is relative to a path
+        root that is not the current working directory, as it is for snapshots
+        written by the CLI.
+
         Args:
             reader: Any TabularReader; only ``columns()`` is called.
             dataset_name: Human-readable dataset name stored in the snapshot.
-            dataset_path: Source path or URI at snapshot time.
+            dataset_path: Source path or URI at snapshot time, recorded in the
+                snapshot verbatim.  Never opened.
             source_type: Origin kind (``"file"``, ``"directory"``, etc.).
             created_by: User or process identifier.
-            source_hash: Pre-computed source hash.  When ``None`` and
-                ``dataset_path`` resolves to a regular file, a SHA-256 of
-                the file bytes is computed automatically.
+            source: Location the data actually lives at, used only to compute
+                ``source_hash``.  Defaults to ``dataset_path``, which is
+                correct when the recorded path is one the process can open.
+            source_hash: Pre-computed source hash.  When ``None`` and the
+                source resolves to a regular file, a SHA-256 of the file bytes
+                is computed automatically.
 
         Returns:
             A populated :class:`SnapshotMetadata` instance.
@@ -71,7 +81,7 @@ class MetadataBuilder:
         path_str = str(dataset_path)
 
         if source_hash is None:
-            p = Path(dataset_path)
+            p = Path(source if source is not None else dataset_path)
             source_hash = _hash_file(p) if p.is_file() else ""
 
         return SnapshotMetadata(

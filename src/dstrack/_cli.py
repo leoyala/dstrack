@@ -7,6 +7,7 @@ import typer
 
 from dstrack import __version__, console
 from dstrack._store_template import STORE_TEMPLATE, materialize
+from dstrack._track import track
 from dstrack.errors import StoreInitError
 from dstrack.utils import get_invocation_path
 
@@ -82,6 +83,11 @@ def init(
         _log.error(f"Failed to create local store. {e}")
         console.error(str(e))
         raise
+
+
+app.command(help="Compute a snapshot of a dataset and store it in the local store.")(
+    track
+)
 
 
 @app.command(help="Print package version.")

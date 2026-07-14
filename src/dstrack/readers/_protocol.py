@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol, TypeAlias, runtime_checkable
 
 # A single cell value after dtype coercion; None represents a missing value.
@@ -63,5 +64,49 @@ class TabularReader(Protocol):
 
         Yields:
             A list of rows, each row being a list of [Cell][dstrack.readers.Cell] values.
+        """
+        ...
+
+
+@runtime_checkable
+class ReaderFactory(Protocol):
+    """Construction contract for readers reached *by name* rather than by instance.
+
+    [TabularReader][dstrack.readers.TabularReader] describes how a reader is
+    *read*, and says nothing about how one is *built*: code that already holds an
+    instance never needs to know. But the registry and the
+    ``"package.module:ClassName"`` spec only ever yield a class, so they need a
+    uniform way to turn that class into an instance given a source path.
+    ``from_path`` is that way, and it is checked against this protocol before the
+    class is ever called.
+
+    This is deliberately a second, separate protocol: a reader used only from
+    Python (constructed by the caller, handed straight to ``SnapshotBuilder``)
+    still needs nothing beyond ``TabularReader``. Only readers that are
+    registered, or named on the command line, must also satisfy this one.
+
+    Examples:
+        ```python
+        >>> from pathlib import Path
+        >>> from dstrack.readers import CsvReader, ReaderFactory
+        >>> isinstance(CsvReader, ReaderFactory)  # the class, not an instance
+        True
+
+        ```
+    """
+
+    def from_path(self, path: Path) -> TabularReader:
+        """Build a reader for ``path`` using default options.
+
+        Implemented as a ``classmethod`` on the reader class; the protocol is
+        therefore checked against the class object itself
+        (``isinstance(MyReader, ReaderFactory)``).
+
+        Args:
+            path: Path to the dataset source the reader will read.
+
+        Returns:
+            An instance satisfying
+            [TabularReader][dstrack.readers.TabularReader].
         """
         ...

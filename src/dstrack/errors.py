@@ -4,3 +4,11 @@ class StoreInitError(Exception):
 
 class StoreNotFoundError(Exception):
     """Raised when no local store root can be resolved."""
+
+
+class StoreCorruptionError(Exception):
+    """Raised when a file in the local store cannot be read back as written."""
+
+
+class DatasetNotFoundError(Exception):
+    """Raised when a named dataset does not exist in the local store."""

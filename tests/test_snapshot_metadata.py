@@ -28,6 +28,7 @@ def _build(
     reader: TabularReader,
     *,
     path: str | Path = "/data/ds.csv",
+    source: str | Path | None = None,
     source_hash: str | None = None,
 ) -> SnapshotMetadata:
     return MetadataBuilder().build(
@@ -36,6 +37,7 @@ def _build(
         dataset_path=path,
         source_type="file",
         created_by="tester",
+        source=source,
         source_hash=source_hash,
     )
 
@@ -179,6 +181,18 @@ def test_source_hash_empty_for_nonexistent_path() -> None:
     """source_hash is an empty string when the dataset path doesn't exist."""
     meta = _build(_make_reader(), path="/nonexistent/path.csv")
     assert meta.source_hash == ""
+
+
+def test_source_hashed_while_dataset_path_recorded(tmp_path: Path) -> None:
+    """The source is hashed; the unopenable dataset_path is recorded verbatim."""
+    content = b"col\n1\n2\n"
+    p = tmp_path / "ds.csv"
+    p.write_bytes(content)
+
+    meta = _build(_make_reader(), path="data/ds.csv", source=p)
+
+    assert meta.dataset_path == "data/ds.csv"
+    assert meta.source_hash == hashlib.sha256(content).hexdigest()
 
 
 # ---------------------------------------------------------------------------
