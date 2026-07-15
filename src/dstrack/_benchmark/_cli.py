@@ -22,6 +22,17 @@ app = typer.Typer(
 _DEFAULTS = SyntheticCsvSpec()
 
 
+@app.callback()
+def _main() -> None:
+    """Keep ``run`` a named subcommand so a bare invocation shows help.
+
+    Typer promotes a lone command to the top level, which quietly discards
+    ``no_args_is_help``; an explicit callback keeps the command group intact so
+    running ``dstrack-benchmark`` with no arguments prints help instead of
+    silently kicking off a full-size benchmark.
+    """
+
+
 @contextmanager
 def _workspace(reporter: ConsoleReporter, *, keep_csv: bool) -> Iterator[Path]:
     """Yield a path for the synthetic CSV, discarding it unless ``keep_csv``."""
