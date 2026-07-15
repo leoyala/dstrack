@@ -24,7 +24,7 @@ Foundation for all future capabilities: reading a dataset and capturing an immut
 - [x] Content fingerprinting (deterministic, format-agnostic)
 - [x] Schema extraction (column names and types)
 - [x] Per-column statistics (counts, ranges, null rates, etc.)
-- [x] `dstrack init` and `dstrack snapshot` commands
+- [x] `dstrack init` and `dstrack track` commands
 - [ ] `dstrack log` command
 
 ## v0.2 - Diff Engine
