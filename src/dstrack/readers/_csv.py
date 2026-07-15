@@ -4,7 +4,7 @@ import os
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from ._protocol import Cell, ColumnInfo
 
@@ -237,6 +237,37 @@ class CsvReader:
             self._columns = self._detect_columns()
         return list(self._columns)
 
+    def _stat_signature(self, fh: TextIO) -> tuple[int, int]:
+        """Return the change signature ``(mtime_ns, size)`` for an open file.
+
+        Args:
+            fh: An open handle to the CSV file.
+
+        Returns:
+            The file's ``mtime_ns`` and size, used to detect whether the file
+            was modified between schema inference and iteration.
+        """
+        stat = os.fstat(fh.fileno())
+        return (stat.st_mtime_ns, stat.st_size)
+
+    def _raise_if_file_changed(self, fh: TextIO) -> None:
+        """Raise if the file changed since schema inference recorded it.
+
+        Compares the current signature of ``fh`` against the one captured in
+        [_detect_columns()][dstrack.readers._csv.CsvReader._detect_columns].
+        Does nothing if no signature has been recorded yet.
+
+        Args:
+            fh: An open handle to the CSV file.
+
+        Raises:
+            RuntimeError: If the file's signature differs from the recorded one.
+        """
+        if self._file_stat is not None and self._stat_signature(fh) != self._file_stat:
+            raise RuntimeError(
+                f"File changed between schema inference and iteration: {self._path}"
+            )
+
     def _detect_columns(self) -> list[ColumnInfo]:
         """Read up to ``sample_rows`` rows and infer a ColumnInfo per field.
 
@@ -253,8 +284,7 @@ class CsvReader:
         )
         samples: dict[str, list[str]] = {}
         with self._path.open(newline="", encoding=self._encoding) as fh:
-            stat = os.fstat(fh.fileno())
-            self._file_stat = (stat.st_mtime_ns, stat.st_size)
+            self._file_stat = self._stat_signature(fh)
             reader = csv.DictReader(fh, **self._csv_kwargs)
             fieldnames = reader.fieldnames
             if not fieldnames:
@@ -313,12 +343,7 @@ class CsvReader:
         batch: list[list[Cell]] = []
 
         with self._path.open(newline="", encoding=self._encoding) as fh:
-            stat = os.fstat(fh.fileno())
-            current = (stat.st_mtime_ns, stat.st_size)
-            if self._file_stat is not None and current != self._file_stat:
-                raise RuntimeError(
-                    f"File changed between schema inference and iteration: {self._path}"
-                )
+            self._raise_if_file_changed(fh)
             reader = csv.DictReader(fh, **self._csv_kwargs)
             _ = reader.fieldnames  # consume header row
             reader.fieldnames = names
