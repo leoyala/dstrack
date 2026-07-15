@@ -3,6 +3,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from dstrack.errors import InputTooLargeError
 from dstrack.readers import Cell, TabularReader
 
 _NUMERIC_DTYPES: frozenset[str] = frozenset(
@@ -10,6 +11,10 @@ _NUMERIC_DTYPES: frozenset[str] = frozenset(
 )
 _NUM_HISTOGRAM_BINS: int = 20
 _TOP_VALUES_K: int = 50
+# Default ceiling on the number of rows a single snapshot pass will accumulate.
+# The pass keeps per-column values, the distinct-row set, and per-string counts
+# in memory, so worst-case memory grows with the row count; this bounds it.
+_DEFAULT_MAX_ROWS: int = 10_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,13 +129,24 @@ class _ColumnAcc(Protocol):
 
 @dataclass
 class _NumericAcc:
-    """Running accumulator for an ``int*``/``float*``/``bool`` column."""
+    """Running accumulator for an ``int*``/``float*``/``bool`` column.
+
+    Non-finite values (``NaN``, ``+inf``, ``-inf``) are treated as null: they
+    are counted in ``null_count`` and excluded from ``vals``. They carry no
+    usable magnitude and would otherwise poison mean/std/percentile/histogram
+    math (e.g. a ``NaN`` step makes the histogram bucket ``int(...)`` raise
+    ``ValueError``) and produce non-JSON-representable output.
+    """
 
     vals: list[float] = field(default_factory=list)
     null_count: int = 0
 
     def update(self, val: Cell) -> None:
-        self.vals.append(float(val))  # type: ignore[arg-type]
+        f = float(val)  # type: ignore[arg-type]
+        if not math.isfinite(f):
+            self.null_count += 1
+            return
+        self.vals.append(f)
 
     def is_constant(self) -> bool:
         return not self.vals or min(self.vals) == max(self.vals)
@@ -227,7 +243,24 @@ class StatsComputer:
     Handles ``int*``, ``float*``, and ``bool`` dtypes as numeric,
     ``string`` columns, and ``datetime64`` columns.  Unknown dtypes produce
     only null counts.
+
+    The pass is exact but in-memory: per-column values, the distinct-row set,
+    and per-string value counts are all retained until it completes, so
+    worst-case memory grows with the row count.  ``max_rows`` bounds that
+    growth by rejecting datasets larger than the limit rather than risking
+    memory exhaustion.
+
+    Args:
+        max_rows: Maximum number of rows the pass will accept.  When the reader
+            yields more than this, an
+            [InputTooLargeError][dstrack.errors.InputTooLargeError] is raised.
+            Defaults to
+            [_DEFAULT_MAX_ROWS][dstrack.snapshot._stats._DEFAULT_MAX_ROWS].
+            Pass ``None`` to disable the limit when enough memory is available.
     """
+
+    def __init__(self, *, max_rows: int | None = _DEFAULT_MAX_ROWS) -> None:
+        self._max_rows = max_rows
 
     def compute(self, reader: TabularReader) -> DatasetStats:
         """Run a full data pass and return aggregated statistics.
@@ -239,6 +272,9 @@ class StatsComputer:
         Returns:
             A populated [DatasetStats][dstrack.snapshot._stats.DatasetStats]
                 instance.
+
+        Raises:
+            InputTooLargeError: If the reader yields more than ``max_rows`` rows.
         """
         cols = reader.columns()
         col_names = [c.name for c in cols]
@@ -256,8 +292,21 @@ class StatsComputer:
             )
             num_rows += batch_rows
             duplicate_count += batch_duplicates
+            # Checked per batch so an oversized file is rejected mid-read,
+            # before the whole dataset is pulled into memory.
+            self._check_row_limit(num_rows)
 
         return self._build_dataset_stats(col_names, accs, num_rows, duplicate_count)
+
+    def _check_row_limit(self, num_rows: int) -> None:
+        """Raise if ``num_rows`` has exceeded the configured ``max_rows``."""
+        if self._max_rows is not None and num_rows > self._max_rows:
+            raise InputTooLargeError(
+                f"Dataset exceeds the snapshot row limit of "
+                f"{self._max_rows:,} rows. Statistics are computed in memory; "
+                f"raise the limit with --max-rows (or max_rows=None to disable) "
+                f"only if enough memory is available."
+            )
 
     def _init_accumulators(self, col_dtypes: dict[str, str]) -> dict[str, _ColumnAcc]:
         """Create one accumulator per column, chosen by dtype."""

@@ -33,7 +33,9 @@ class SnapshotBuilder:
             [MetadataBuilder][dstrack.snapshot._metadata.MetadataBuilder].
         stats_computer: Computer used for the per-column and dataset-level
             statistics.  Defaults to a fresh
-            [StatsComputer][dstrack.snapshot._stats.StatsComputer].
+            [StatsComputer][dstrack.snapshot._stats.StatsComputer].  Pass a
+            pre-configured ``StatsComputer(max_rows=...)`` here to change the
+            in-memory row limit the statistics pass enforces.
     """
 
     def __init__(

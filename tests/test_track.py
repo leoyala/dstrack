@@ -182,6 +182,30 @@ def test_track_unknown_dataset_id_errors(tmp_path: Path, store: Path) -> None:
     assert "does-not-exist" in result.output
 
 
+def test_track_max_rows_below_row_count_exits_with_error(
+    tmp_path: Path, store: Path
+) -> None:
+    """--max-rows below the dataset's row count fails with an actionable message."""
+    csv = _write_csv(tmp_path / "data.csv", rows=5)
+
+    result = runner.invoke(app, ["track", str(csv), "--max-rows", "2"])
+
+    assert result.exit_code == 1
+    assert "--max-rows" in result.output
+    # Nothing is written when the limit is exceeded.
+    assert not list(store.glob("datasets/*/snapshots/*.json"))
+
+
+def test_track_max_rows_above_row_count_succeeds(tmp_path: Path, store: Path) -> None:
+    """A --max-rows at or above the row count writes the snapshot normally."""
+    csv = _write_csv(tmp_path / "data.csv", rows=3)
+
+    result = runner.invoke(app, ["track", str(csv), "--max-rows", "3"])
+
+    assert result.exit_code == 0, result.output
+    assert _load_only_snapshot(store)["num_rows"] == 3
+
+
 # ---------------------------------------------------------------------------
 # Failure paths
 # ---------------------------------------------------------------------------

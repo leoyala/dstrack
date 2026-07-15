@@ -12,3 +12,7 @@ class StoreCorruptionError(Exception):
 
 class DatasetNotFoundError(Exception):
     """Raised when a named dataset does not exist in the local store."""
+
+
+class InputTooLargeError(Exception):
+    """Raised when a dataset exceeds the configured snapshot row limit."""

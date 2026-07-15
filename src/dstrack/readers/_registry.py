@@ -22,6 +22,7 @@ path);
 that *before* the class is ever instantiated.
 """
 
+import inspect
 import logging
 from collections.abc import Sequence
 from importlib.metadata import entry_points
@@ -86,6 +87,13 @@ def check_reader_class(obj: object, *, origin: str) -> type[TabularReader]:
             "protocol: it must define a from_path(path) classmethod, which is "
             "how dstrack builds a reader it knows only by name."
         )
+    # Check that from_path is a class method
+    if not isinstance(inspect.getattr_static(obj, "from_path"), classmethod):
+        raise TypeError(
+            f"{qualname} (from {origin}) defines from_path, but not as a "
+            "classmethod: dstrack calls it on the class (MyReader.from_path(path)), "
+            "so it must be decorated with @classmethod."
+        )
     return obj
 
 
@@ -101,12 +109,21 @@ def build_reader(reader_cls: type[TabularReader], path: Path) -> TabularReader:
         The reader instance.
 
     Raises:
-        TypeError: If ``reader_cls`` was never validated and lacks ``from_path``.
+        TypeError: If ``reader_cls`` was never validated and lacks ``from_path``,
+            or if its ``from_path`` returns something that is not a
+            [TabularReader][dstrack.readers._protocol.TabularReader].
     """
     factory: object = reader_cls
     if not isinstance(factory, ReaderFactory):
         raise TypeError(f"{reader_cls!r} is not an instance of {ReaderFactory}")
-    return factory.from_path(path)
+    reader: object = factory.from_path(path)
+    if not isinstance(reader, TabularReader):
+        qualname = f"{reader_cls.__module__}.{reader_cls.__qualname__}"
+        raise TypeError(
+            f"{qualname}.from_path returned {reader!r}, which is not a "
+            "TabularReader: from_path must build an object that follows this protocol."
+        )
+    return reader
 
 
 def register_reader(
@@ -133,6 +150,11 @@ def register_reader(
             never silently displaces an existing reader: two packages fighting
             over ``.parquet`` is a conflict the user has to see, not one to
             resolve by import order.
+        ValueError: If any extension is malformed. An extension is matched
+            against [Path.suffix][pathlib.PurePath.suffix], so it must be a
+            single leading-dot suffix such as ``".csv"``: a value like ``"csv"``
+            or ``".tar.gz"`` could never match and is rejected rather than
+            silently registered as dead weight.
     """
     check_reader_class(reader_cls, origin=f"reader {name!r}")
 
@@ -146,6 +168,15 @@ def register_reader(
         )
 
     claimed = [ext.lower() for ext in extensions]
+    for ext in claimed:
+        # An extension is only ever compared against Path.suffix, which is a
+        # single leading-dot component (".csv").
+        if not ext.startswith(".") or Path(f"_{ext}").suffix != ext:
+            raise ValueError(
+                f"Extension {ext!r} (for reader {name!r}) is malformed: an "
+                "extension must be a single leading-dot suffix such as '.csv', "
+                "so that it can match Path.suffix."
+            )
     for ext in claimed:
         if ext in _BY_EXTENSION:
             owner = _BY_EXTENSION[ext]

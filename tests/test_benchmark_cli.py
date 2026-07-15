@@ -3,6 +3,7 @@
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from typer.testing import CliRunner
@@ -57,10 +58,11 @@ def _make_run() -> BenchmarkRun:
 class _StubRunner:
     """Stands in for BenchmarkRunner, recording how the CLI constructed it."""
 
+    instances: ClassVar[list["_StubRunner"]] = []
+
     def __init__(
         self, spec: SyntheticCsvSpec, *, observer: object = None, profile: bool = True
     ) -> None:
-        self.instances: list[_StubRunner] = []
         self.spec = spec
         self.observer = observer
         self.profile = profile

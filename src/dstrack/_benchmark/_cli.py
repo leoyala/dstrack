@@ -50,22 +50,23 @@ def _workspace(reporter: ConsoleReporter, *, keep_csv: bool) -> Iterator[Path]:
 @app.command(help="Generate a synthetic CSV and benchmark snapshot creation on it.")
 def run(
     rows: Annotated[
-        int, typer.Option(help="Number of data rows to generate.")
+        int, typer.Option(min=0, help="Number of data rows to generate.")
     ] = _DEFAULTS.num_rows,
     numeric_cols: Annotated[
-        int, typer.Option(help="Number of numeric (float) columns.")
+        int, typer.Option(min=0, help="Number of numeric (float) columns.")
     ] = _DEFAULTS.num_numeric_cols,
     string_cols: Annotated[
-        int, typer.Option(help="Number of string columns.")
+        int, typer.Option(min=0, help="Number of string columns.")
     ] = _DEFAULTS.num_string_cols,
     datetime_cols: Annotated[
-        int, typer.Option(help="Number of datetime columns.")
+        int, typer.Option(min=0, help="Number of datetime columns.")
     ] = _DEFAULTS.num_datetime_cols,
     bool_cols: Annotated[
-        int, typer.Option(help="Number of boolean columns.")
+        int, typer.Option(min=0, help="Number of boolean columns.")
     ] = _DEFAULTS.num_bool_cols,
     null_rate: Annotated[
-        float, typer.Option(help="Fraction of non-id cells left null.")
+        float,
+        typer.Option(min=0.0, max=1.0, help="Fraction of non-id cells left null."),
     ] = _DEFAULTS.null_rate,
     seed: Annotated[
         int, typer.Option(help="Random seed for reproducible synthetic data.")
@@ -86,8 +87,9 @@ def run(
     profile_limit: Annotated[
         int,
         typer.Option(
+            min=0,
             help="Max number of child methods shown under each node of the "
-            "profile call tree, ranked by cumulative time."
+            "profile call tree, ranked by cumulative time.",
         ),
     ] = 20,
 ) -> None:

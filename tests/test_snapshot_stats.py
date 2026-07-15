@@ -1,10 +1,12 @@
 """Tests for StatsComputer."""
 
+import math
 from collections.abc import Iterator
 from dataclasses import fields
 
 import pytest
 
+from dstrack.errors import InputTooLargeError
 from dstrack.readers import Cell, ColumnInfo, TabularReader
 from dstrack.snapshot import DatasetStats, StatsComputer
 
@@ -252,6 +254,62 @@ def test_bool_treated_as_numeric() -> None:
     assert s.max == 1.0
 
 
+def test_numeric_nan_treated_as_null() -> None:
+    """NaN values are counted as null and excluded from numeric statistics."""
+    nan = float("nan")
+    stats = _compute(
+        [ColumnInfo("v", "float64")],
+        [[1.0], [nan], [3.0]],
+    )
+    s = stats.column_stats["v"]
+    assert s.null_count == 1
+    assert s.null_fraction == pytest.approx(1 / 3, abs=1e-9)
+    assert s.min == 1.0
+    assert s.max == 3.0
+    assert s.mean == pytest.approx(2.0, abs=1e-9)
+    assert s.num_unique == 2
+    assert math.isfinite(s.std)
+
+
+def test_numeric_infinity_treated_as_null() -> None:
+    """Positive and negative infinity are counted as null, keeping stats finite."""
+    stats = _compute(
+        [ColumnInfo("v", "float64")],
+        [[1.0], [float("inf")], [float("-inf")], [5.0]],
+    )
+    s = stats.column_stats["v"]
+    assert s.null_count == 2
+    assert s.null_fraction == pytest.approx(0.5, abs=1e-9)
+    assert s.min == 1.0
+    assert s.max == 5.0
+    assert math.isfinite(s.mean)
+    assert all(math.isfinite(e) for e in s.histogram.bin_edges)
+
+
+def test_numeric_all_non_finite_returns_zeros() -> None:
+    """A column of only non-finite values behaves like an all-null column."""
+    stats = _compute(
+        [ColumnInfo("v", "float64")],
+        [[float("nan")], [float("inf")]],
+    )
+    s = stats.column_stats["v"]
+    assert s.null_count == 2
+    assert s.mean == 0.0
+    assert s.std == 0.0
+    assert s.num_unique == 0
+    assert "v" in stats.constant_columns
+
+
+def test_numeric_non_finite_histogram_does_not_raise() -> None:
+    """A NaN in the data must not break histogram bucketing (regression)."""
+    rows: list[list[Cell]] = [[float(i)] for i in range(10)]
+    rows.append([float("nan")])
+    stats = _compute([ColumnInfo("v", "float64")], rows)
+    hist = stats.column_stats["v"].histogram
+    assert len(hist.bin_edges) == len(hist.counts) + 1
+    assert sum(hist.counts) == 10
+
+
 # ---------------------------------------------------------------------------
 # String column stats
 # ---------------------------------------------------------------------------
@@ -362,3 +420,55 @@ def test_datetime_all_null() -> None:
     assert s.min == ""
     assert s.max == ""
     assert s.range_days == pytest.approx(0.0, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# max_rows limit
+# ---------------------------------------------------------------------------
+
+
+def _batched_reader(
+    cols: list[ColumnInfo], batches: list[list[list[Cell]]]
+) -> TabularReader:
+    """A reader that yields pre-split batches, to exercise the per-batch guard."""
+
+    class _Stub:
+        def columns(self) -> list[ColumnInfo]:
+            return cols
+
+        def iter_batches(self, batch_size: int = 1000) -> Iterator[list[list[Cell]]]:
+            yield from batches
+
+    return _Stub()  # type: ignore[return-value]
+
+
+def test_max_rows_at_limit_computes_normally() -> None:
+    """A dataset exactly at the row limit is processed without error."""
+    cols = [ColumnInfo("x", "int64")]
+    rows: list[list[Cell]] = [[i] for i in range(3)]
+    stats = StatsComputer(max_rows=3).compute(_reader(cols, rows))
+    assert stats.num_rows == 3
+
+
+def test_max_rows_exceeded_raises() -> None:
+    """A dataset larger than the row limit raises InputTooLargeError."""
+    cols = [ColumnInfo("x", "int64")]
+    rows: list[list[Cell]] = [[i] for i in range(5)]
+    with pytest.raises(InputTooLargeError, match="max-rows"):
+        StatsComputer(max_rows=3).compute(_reader(cols, rows))
+
+
+def test_max_rows_enforced_across_batches() -> None:
+    """The limit counts rows dataset-wide, not per batch."""
+    cols = [ColumnInfo("x", "int64")]
+    batches: list[list[list[Cell]]] = [[[0], [1]], [[2], [3]]]
+    with pytest.raises(InputTooLargeError):
+        StatsComputer(max_rows=3).compute(_batched_reader(cols, batches))
+
+
+def test_max_rows_none_never_raises() -> None:
+    """max_rows=None disables the limit."""
+    cols = [ColumnInfo("x", "int64")]
+    rows: list[list[Cell]] = [[i] for i in range(100)]
+    stats = StatsComputer(max_rows=None).compute(_reader(cols, rows))
+    assert stats.num_rows == 100

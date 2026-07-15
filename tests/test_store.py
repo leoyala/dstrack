@@ -97,3 +97,48 @@ def test_log_line_appended_per_snapshot(tmp_path: Path) -> None:
     assert (tmp_path / "datasets" / first.dataset_id / "HEAD").read_text().strip() == (
         second.snapshot_id
     )
+
+
+def test_trailing_log_entry_past_head_is_ignored(tmp_path: Path) -> None:
+    """Path matching follows committed HEAD, not a log line a crash left behind.
+
+    A crash between the ``log.jsonl`` append and the ``HEAD`` write leaves the
+    log one entry ahead of what is committed. Re-tracking the path must continue
+    the lineage from HEAD and ignore that uncommitted trailing line.
+    """
+    first = write_snapshot(_snapshot("data/ds.csv"), store_root=tmp_path)
+    dataset_dir = tmp_path / "datasets" / first.dataset_id
+
+    # Simulate the crash: a log line for a snapshot HEAD never advanced onto,
+    # recording a different path than the committed HEAD.
+    phantom = {"snapshot_id": "phantom", "dataset_path": "data/other.csv"}
+    with (dataset_dir / "log.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(phantom) + "\n")
+
+    second = write_snapshot(_snapshot("data/ds.csv"), store_root=tmp_path)
+
+    assert not second.is_new_dataset
+    assert second.dataset_id == first.dataset_id
+    assert second.parent_snapshot_id == first.snapshot_id
+
+
+@pytest.mark.parametrize("bad_id", ["../../evil", "a/b", "/etc/passwd"])
+def test_traversal_snapshot_id_is_rejected(tmp_path: Path, bad_id: str) -> None:
+    """A snapshot_id that would escape the dataset's snapshots/ is refused."""
+    with pytest.raises(ValueError):
+        write_snapshot(_snapshot(snapshot_id=bad_id), store_root=tmp_path)
+
+
+@pytest.mark.parametrize("bad_id", ["../../evil", "a/b", "/etc/passwd"])
+def test_traversal_dataset_id_is_rejected(tmp_path: Path, bad_id: str) -> None:
+    """An explicit dataset_id that would escape datasets/ is refused."""
+    with pytest.raises(ValueError):
+        write_snapshot(_snapshot(), store_root=tmp_path, dataset_id=bad_id)
+
+
+def test_rejected_snapshot_id_writes_nothing(tmp_path: Path) -> None:
+    """A rejected snapshot_id leaves no dataset directory behind."""
+    with pytest.raises(ValueError):
+        write_snapshot(_snapshot(snapshot_id="../../evil"), store_root=tmp_path)
+
+    assert not (tmp_path / "datasets").exists()

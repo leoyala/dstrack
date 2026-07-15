@@ -76,6 +76,24 @@ class NotAReader:
         return cls()
 
 
+class InstanceFromPathReader:
+    """Reads fine and has from_path, but forgot the @classmethod decorator.
+
+    Passes a bare ``isinstance(cls, ReaderFactory)`` check because the attribute
+    exists, yet ``cls.from_path(path)`` would bind ``path`` to ``self``.
+    """
+
+    def from_path(self, path: Path) -> "InstanceFromPathReader":
+        CONSTRUCTED.append(Path(path))
+        return self
+
+    def columns(self) -> list[ColumnInfo]:
+        return []
+
+    def iter_batches(self, batch_size: int = 1000) -> Iterator[list[list[Cell]]]:
+        return iter([])
+
+
 not_a_class = "definitely not a class"
 
 
@@ -264,6 +282,45 @@ def test_class_missing_from_path_is_rejected_unconstructed(tmp_path: Path) -> No
     assert CONSTRUCTED == []
 
 
+def test_instance_method_from_path_is_rejected_unconstructed(tmp_path: Path) -> None:
+    """A from_path that forgot @classmethod is caught before it is ever called."""
+    path = tmp_path / "a.thing"
+    path.touch()
+
+    with pytest.raises(TypeError, match="classmethod"):
+        resolve_reader(path, reader=spec_for(InstanceFromPathReader))
+
+    assert CONSTRUCTED == []
+
+
+def test_register_reader_rejects_instance_method_from_path() -> None:
+    """The non-classmethod check also guards registration, not just build time."""
+    with pytest.raises(TypeError, match="classmethod"):
+        register_reader(InstanceFromPathReader, name="bad")  # type: ignore[arg-type]
+
+    assert "bad" not in available_readers()
+
+
+def test_build_reader_rejects_non_reader_return(tmp_path: Path) -> None:
+    """build_reader rejects a from_path that returns something un-readable."""
+    path = tmp_path / "a.thing"
+    path.touch()
+
+    class BadReturnReader:
+        @classmethod
+        def from_path(cls, path: Path) -> object:
+            return "not a reader"
+
+        def columns(self) -> list[ColumnInfo]:
+            return []
+
+        def iter_batches(self, batch_size: int = 1000) -> Iterator[list[list[Cell]]]:
+            return iter([])
+
+    with pytest.raises(TypeError, match="not a TabularReader"):
+        _registry.build_reader(BadReturnReader, path)
+
+
 def test_non_class_target_is_rejected() -> None:
     """A spec that names a module-level value, not a class, fails cleanly."""
     with pytest.raises(TypeError, match="not a class"):
@@ -293,6 +350,25 @@ def test_duplicate_extension_raises() -> None:
     """Two readers fighting over one extension is a conflict the user has to see."""
     with pytest.raises(ValueError, match=r"Extension '.csv' is already registered"):
         register_reader(GoodReader, name="good", extensions=[".csv"])
+
+
+@pytest.mark.parametrize("ext", ["csv", "", ".", ".tar.gz"])
+def test_malformed_extension_raises(ext: str) -> None:
+    """An extension that could never match Path.suffix is rejected, not stored."""
+    with pytest.raises(ValueError, match="malformed"):
+        register_reader(GoodReader, name="good", extensions=[ext])
+
+    assert ext not in known_extensions()
+    assert "good" not in available_readers()
+
+
+def test_malformed_extension_leaves_registry_untouched() -> None:
+    """A bad extension is caught before the name or any extension is claimed."""
+    with pytest.raises(ValueError, match="malformed"):
+        register_reader(GoodReader, name="good", extensions=[".fine", "bad"])
+
+    assert "good" not in available_readers()
+    assert ".fine" not in known_extensions()
 
 
 def test_explicit_extensions_override_the_class_attribute() -> None:

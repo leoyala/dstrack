@@ -13,6 +13,7 @@ every layer.
 """
 
 import csv
+import math
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -95,6 +96,26 @@ class SyntheticCsvSpec:
     num_bool_cols: int = 2
     null_rate: float = 0.02
     seed: int = 42
+
+    def __post_init__(self) -> None:
+        """Reject counts and a null rate that would silently corrupt the dataset.
+
+        Negative counts and an out-of-range ``null_rate`` have no meaningful
+        dataset to generate, so they are refused here rather than producing a
+        subtly wrong CSV further downstream.
+        """
+        for name in (
+            "num_rows",
+            "num_numeric_cols",
+            "num_string_cols",
+            "num_datetime_cols",
+            "num_bool_cols",
+        ):
+            value: int = getattr(self, name)
+            if value < 0:
+                raise ValueError(f"{name} must be >= 0, got {value}")
+        if not (math.isfinite(self.null_rate) and 0.0 <= self.null_rate <= 1.0):
+            raise ValueError(f"null_rate must be in [0, 1], got {self.null_rate!r}")
 
     def columns(self) -> list[SyntheticColumn]:
         """Return the nullable, randomly generated columns, in file order.

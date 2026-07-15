@@ -10,12 +10,13 @@ import typer
 from dstrack import console
 from dstrack.errors import (
     DatasetNotFoundError,
+    InputTooLargeError,
     StoreCorruptionError,
     StoreNotFoundError,
 )
 from dstrack.paths import resolve_store_root
 from dstrack.readers import resolve_reader
-from dstrack.snapshot import SnapshotBuilder
+from dstrack.snapshot import SnapshotBuilder, StatsComputer
 from dstrack.store import write_snapshot
 
 
@@ -72,6 +73,15 @@ def track(
         str | None,
         typer.Option("--created-by", help="Override the recorded author."),
     ] = None,
+    max_rows: Annotated[
+        int | None,
+        typer.Option(
+            "--max-rows",
+            help="Maximum number of rows to process. Statistics are computed "
+            "in memory, so this bounds memory use; datasets larger than the "
+            "limit are rejected. Omit to use the default limit.",
+        ),
+    ] = None,
 ) -> None:
     """Compute a snapshot of a dataset and store it in the local store."""
     # Locate the .dstrack/ store; without one there is nowhere to write.
@@ -100,14 +110,23 @@ def track(
     # portable relative path is recorded; the real file on disk is what gets read
     # and hashed.
     console.info(f"Reading {path} and computing snapshot...")
-    snapshot = SnapshotBuilder().build(
-        tabular_reader,
-        dataset_name=name or path.stem,
-        dataset_path=dataset_path,
-        source=path,
-        source_type="file",  # TODO: Add a way to manage other sources like folders
-        created_by=created_by or _default_created_by(),
+    # An explicit --max-rows overrides the StatsComputer default; omitting it
+    # keeps the built-in limit that guards against unbounded memory use.
+    stats_computer = (
+        StatsComputer() if max_rows is None else StatsComputer(max_rows=max_rows)
     )
+    try:
+        snapshot = SnapshotBuilder(stats_computer=stats_computer).build(
+            tabular_reader,
+            dataset_name=name or path.stem,
+            dataset_path=dataset_path,
+            source=path,
+            source_type="file",  # TODO: Add a way to manage other sources like folders
+            created_by=created_by or _default_created_by(),
+        )
+    except InputTooLargeError as e:
+        console.error(str(e))
+        raise typer.Exit(code=1) from e
 
     # Persist the snapshot, attaching it to an existing lineage when one matches.
     try:

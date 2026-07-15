@@ -132,6 +132,11 @@ class BenchmarkRunner:
 
     def run(self, csv_path: Path) -> BenchmarkRun:
         """Generate the dataset at ``csv_path`` and benchmark a snapshot of it."""
+        # clean profiler if already created to avoid misleading profiles on re-runs.
+        if self._profiler is not None:
+            self._profiler.clear()
+
+        # generate data for benchmark
         self._observer.generating_csv(csv_path, self._spec.num_rows)
         with self._timed() as generation:
             write_synthetic_csv(csv_path, self._spec)

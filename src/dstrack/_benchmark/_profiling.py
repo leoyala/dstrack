@@ -108,6 +108,7 @@ class CallGraph:
         graph = cls(_scope=scope)
         frames = {key for key in raw if scope.contains(key[0])}
         callees: set[FrameKey] = set()
+        entrypoints: set[FrameKey] = set()
 
         for key in frames:
             primitive_calls, num_calls, total_time, cumulative_time, callers = raw[key]
@@ -121,8 +122,14 @@ class CallGraph:
                 if caller in frames:
                     graph._children.setdefault(caller, []).append(key)
                     callees.add(key)
+                else:
+                    entrypoints.add(key)
 
-        graph._roots = graph._by_cumulative(frames - callees)
+        # A frame is a root if nothing in scope called it, or if it was also
+        # entered from outside the scope.  The latter keeps external entry
+        # points into a recursive component (f -> g -> f) as roots, which
+        # ``frames - callees`` alone would drop, leaving the tree empty.
+        graph._roots = graph._by_cumulative((frames - callees) | entrypoints)
         return graph
 
     @property
@@ -136,7 +143,13 @@ class CallGraph:
         Args:
             max_children: Maximum callees expanded under each node, ranked by
                 cumulative time.  The rest are counted in ``hidden_children``.
+
+        Raises:
+            ValueError: If ``max_children`` is negative, which would slice the
+                callee list from the end rather than cap it as documented.
         """
+        if max_children < 0:
+            raise ValueError(f"max_children must be >= 0, got {max_children}")
         return [
             self._expand(root, ancestors=frozenset({root}), max_children=max_children)
             for root in self._roots
