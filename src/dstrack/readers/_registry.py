@@ -171,7 +171,7 @@ def register_reader(
     for ext in claimed:
         # An extension is only ever compared against Path.suffix, which is a
         # single leading-dot component (".csv").
-        if not ext.startswith(".") or Path(f"_{ext}").suffix != ext:
+        if not ext.startswith(".") or ext == "." or Path(f"_{ext}").suffix != ext:
             raise ValueError(
                 f"Extension {ext!r} (for reader {name!r}) is malformed: an "
                 "extension must be a single leading-dot suffix such as '.csv', "
