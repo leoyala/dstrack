@@ -1,3 +1,8 @@
+from importlib.metadata import PackageNotFoundError, version
+
 from . import _logging as _logging
 
-__version__ = "0.1.0"
+try:
+    __version__ = version("dstrack")
+except PackageNotFoundError:
+    __version__ = "unknown"
