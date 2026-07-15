@@ -6,7 +6,7 @@ icon: lucide/route
 
 This page tracks the planned development of `dstrack`. Each milestone ships as a versioned release and builds directly on the previous one.
 
-## v0.1 — Project Skeleton
+## v0.1 - Project Skeleton
 
 Foundation tooling: packaging, linting, type checking, CI/CD, and release automation.
 
@@ -19,15 +19,15 @@ Foundation tooling: packaging, linting, type checking, CI/CD, and release automa
 
 Foundation for all future capabilities: reading a dataset and capturing an immutable record of its state.
 
-- [ ] Local snapshot store
+- [x] Local snapshot store
 - [x] CSV support (no extra dependencies)
-- [ ] Content fingerprinting (deterministic, format-agnostic)
-- [ ] Schema extraction (column names and types)
-- [ ] Per-column statistics (counts, ranges, null rates, etc.)
-- [ ] `dstrack init` and `dstrack snapshot` commands
+- [x] Content fingerprinting (deterministic, format-agnostic)
+- [x] Schema extraction (column names and types)
+- [x] Per-column statistics (counts, ranges, null rates, etc.)
+- [x] `dstrack init` and `dstrack track` commands
 - [ ] `dstrack log` command
 
-## v0.2 — Diff Engine
+## v0.2 - Diff Engine
 
 Compare two snapshots and surface what changed between them.
 
@@ -37,7 +37,7 @@ Compare two snapshots and surface what changed between them.
 - [ ] `dstrack diff` command
 - [ ] Structured JSON output for machine consumption
 
-## v0.3 — CLI Polish
+## v0.3 - CLI Polish
 
 A first-class command-line experience ready for daily use.
 
@@ -47,7 +47,7 @@ A first-class command-line experience ready for daily use.
 - [ ] `--json` flag on all commands
 - [ ] Shell completion
 
-## v0.4 — Format and Integration Expansion
+## v0.4 - Format and Integration Expansion
 
 Support the data formats researchers and engineers actually use.
 
@@ -56,7 +56,7 @@ Support the data formats researchers and engineers actually use.
 - [ ] NumPy array support (optional install extra)
 - [ ] `dstrack.pandas` convenience module for snapshotting DataFrames directly
 
-## v0.5 — CI/CD Integration
+## v0.5 - CI/CD Integration
 
 Make drift detection a native step in automated pipelines.
 
@@ -64,7 +64,7 @@ Make drift detection a native step in automated pipelines.
 - [ ] Integration into other frameworks: polars, moflow, etc.
 - [ ] CI integration documentation and working examples
 
-## v0.6 — Migration Engine & Documentation and Examples
+## v0.6 - Migration Engine & Documentation and Examples
 
 Everything a new user needs to be productive in under 10 minutes.
 
@@ -76,7 +76,7 @@ Everything a new user needs to be productive in under 10 minutes.
 - [ ] API reference (auto-generated from source)
 - [ ] Automated docs deployment on each release
 
-## v1.0 — Stable Release
+## v1.0 - Stable Release
 
 A production-ready release with documented compatibility guarantees.
 

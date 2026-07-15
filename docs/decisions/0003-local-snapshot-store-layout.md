@@ -18,7 +18,7 @@ needs a concrete answer to four questions:
    renames and moved files?
 3. How can a user quickly search across many tracked datasets, or view the history of
    one, without reading every snapshot's full payload?
-4. How does `dstrack snapshot` know which dataset a given file belongs to, given that
+4. How does `dstrack track` know which dataset a given file belongs to, given that
    the same logical dataset may live at different paths on different machines?
 
 A key property, established by ADR-0001, shapes the answer to all four: a snapshot
@@ -78,7 +78,7 @@ Two different jobs need two different mechanisms:
 - **History of one dataset** (`dstrack log <dataset_id>`) only ever reads that
   dataset's own `snapshots/`, so no index is needed to make it fast. `dstrack log <path>`
   is also accepted, resolved to a `dataset_id` via the same path-matching used by
-  `dstrack snapshot` (see [Path resolution](#path-resolution-relative-root-overridable-never-a-shared-pointer)); if
+  `dstrack track` (see [Path resolution](#path-resolution-relative-root-overridable-never-a-shared-pointer)); if
   the path doesn't exactly match any dataset's last recorded one, `--dataset-id` is
   required instead.
 - **Search across many datasets** (`dstrack search ...`, by name/tag/pipeline stage)
@@ -86,7 +86,7 @@ Two different jobs need two different mechanisms:
   tags, files that may also contain large histograms and MinHash/HyperLogLog sketches
   (see ADR-0001). Search needs a cheap, lightweight path.
 
-`log.jsonl` is the fix for both, and is committed to git. Every `dstrack snapshot` call
+`log.jsonl` is the fix for both, and is committed to git. Every `dstrack track` call
 writes the full snapshot JSON, appends one line to `log.jsonl` with only the lightweight
 identity fields (`snapshot_id`, `parent_snapshot_id`, `created_at`, `created_by`,
 `dataset_name`, `dataset_path`, `description`, `tags`, `num_rows`,
@@ -98,7 +98,7 @@ rebuild step.
 `cache/index.db` (SQLite, stdlib `sqlite3`, no new dependency) is a pure performance
 accelerator for cross-dataset search, built by reading the small `log.jsonl` files,
 never the heavy snapshot JSON. It is **not** a second source of truth: it is gitignored
-and safe to delete at any time. Every `dstrack snapshot` call appends its new row
+and safe to delete at any time. Every `dstrack track` call appends its new row
 straight to the index, and every `dstrack search` also stats each dataset's `log.jsonl`
 first and re-syncs any lines it's missing (size/mtime tracked per dataset), so
 first-use, deletion, and pulls from other machines are all covered too. Between the
@@ -110,7 +110,7 @@ Every snapshot's `dataset_path` (ADR-0001) is stored relative to a *path root*, 
 written with `/` separators regardless of OS, and interpreted back with
 `pathlib.Path` so it round-trips correctly cross-platform. The path root defaults to
 the store root (the directory `.dstrack/` was found in, by walking up from cwd);
-`dstrack snapshot --root <dir>` overrides it for a single invocation, for cases where
+`dstrack track --root <dir>` overrides it for a single invocation, for cases where
 the data doesn't live under the checkout at all (a separate mount, a CI temp
 directory, a per-environment bucket).
 
@@ -122,7 +122,7 @@ layouts disagree. Instead, every snapshot honestly records the relative path use
 history to append to. Nothing needs to be declared ahead of time, and there is no
 default/override split to maintain.
 
-This also answers how `dstrack snapshot <path>` knows which dataset a file belongs to:
+This also answers how `dstrack track <path>` knows which dataset a file belongs to:
 it computes the candidate relative path and compares it against
 each dataset's most recent (`HEAD`) `log.jsonl` entry. An exact match continues that
 dataset's lineage. No match means either a genuinely new dataset,
@@ -133,7 +133,7 @@ are resolved the same way: pass `--dataset-id <uuid>` explicitly (found via
 `dstrack log`/`dstrack search`) to say `"this is a continuation, not a new dataset."`
 
 ### Snapshot write path
-Given `dstrack snapshot <path> [--name NAME] [--root DIR] [--dataset-id ID]`:
+Given `dstrack track <path> [--name NAME] [--root DIR] [--dataset-id ID]`:
 
 1. Resolve the store root by walking up from cwd to find `.dstrack/`.
 2. Resolve the path root: `--root` if given, otherwise the store root. Compute
@@ -156,7 +156,7 @@ Given `dstrack snapshot <path> [--name NAME] [--root DIR] [--dataset-id ID]`:
    fully written.
 
 ### Readers are chosen per invocation, never persisted
-A reader is resolved fresh on every `dstrack snapshot` call: inferred from the file's
+A reader is resolved fresh on every `dstrack track` call: inferred from the file's
 extension, or named explicitly by `--reader`, which accepts either a registered reader
 name (`--reader csv`) or a `package.module:ClassName` spec that `dstrack` imports
 directly (`--reader mypackage.readers:ExcelReader`).
@@ -169,7 +169,7 @@ execution. That is perfectly safe as an argument the invoking user typed themsel
 it is exactly how gunicorn, uvicorn and celery accept application objects. It stops being
 safe the moment the same string is read from a file, because `.dstrack/` is *committed to
 git* (see [Location](#location)) and therefore travels with the repo. A reader spec stored
-in a snapshot would mean that cloning a repository and running `dstrack snapshot` executes
+in a snapshot would mean that cloning a repository and running `dstrack track` executes
 an importable path chosen by whoever wrote that commit, turning a pull request into a code
 execution vector on every reviewer's and CI runner's machine.
 
@@ -197,12 +197,12 @@ is the supported answer.
 ## Example walkthrough
 
 Snapshot two new datasets. There is no separate registration step, the first
-`dstrack snapshot` call for a given file is what creates it:
+`dstrack track` call for a given file is what creates it:
 
 ```
 dstrack init
-dstrack snapshot data/train.csv --name "Customer Churn"
-dstrack snapshot data/catalog.parquet --name "Product Catalog"
+dstrack track data/train.csv --name "Customer Churn"
+dstrack track data/catalog.parquet --name "Product Catalog"
 ```
 
 The first call mints a `dataset_id`, computes `dataset_path` relative to the store
@@ -224,7 +224,7 @@ Later, `data/train.csv` is updated and re-snapshotted, no name needed, since the
 dataset already exists:
 
 ```
-dstrack snapshot data/train.csv
+dstrack track data/train.csv
 ```
 
 `dstrack` computes `dataset_path` (`data/train.csv`), finds it matches the
@@ -246,7 +246,7 @@ and once, for their first snapshot on this machine, tells `dstrack` which datase
 it continues, since the path won't auto-match:
 
 ```
-dstrack snapshot /mnt/shared-data/exports/train_2026_07.csv \
+dstrack track /mnt/shared-data/exports/train_2026_07.csv \
     --root /mnt/shared-data/exports \
     --dataset-id 8f14e45f-ceea-4c6a-8f31-8b0e2e1a9c3f
 ```

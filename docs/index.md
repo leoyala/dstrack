@@ -11,14 +11,18 @@ icon: lucide/rocket
 
 **Dataset versioning and monitoring for the machine learning lifecycle.**
 
-`dstrack` helps data scientists and ML engineers track how datasets evolve over time — catching schema drift, distribution shifts, and unexpected mutations before they silently break pipelines or degrade model performance.
+`dstrack` helps data scientists and ML engineers track how datasets evolve over time - catching schema drift, distribution shifts, and unexpected mutations before they silently break pipelines or degrade model performance.
 
 ## Features
 
-- **Dataset versioning** — snapshot and compare datasets across pipeline stages
-- **Change detection** — identify schema and structural changes between versions
-- **Drift monitoring** — detect distribution shifts that can affect model performance
-- **Lightweight CLI** — simple command-line interface with no heavy dependencies
+- **Dataset versioning** - snapshot a dataset and track its lineage across pipeline stages
+- **Rich snapshots** - schema hash, content fingerprint, and per-column statistics
+- **CSV out of the box** - pure standard-library reader, no heavy dependencies
+- **Lightweight CLI** - a small, git-like local store you can commit alongside your code
+
+!!! note "On the roadmap"
+    Change detection and drift monitoring - comparing snapshots to surface schema and
+    distribution shifts - are planned. See the [roadmap](roadmap.md).
 
 ## Installation
 
@@ -30,13 +34,25 @@ Requires Python 3.11 or later.
 
 ## Quickstart
 
+Initialize a store, then snapshot a dataset:
+
 ```bash
-dstrack
+dstrack init
+dstrack track data.csv
 ```
+
+```text
+ℹ Reading data.csv and computing snapshot...
+✔ Snapshot <snapshot-uuid> written (new dataset, dataset <dataset-uuid>).
+ℹ Stored at /path/to/.dstrack/datasets/<dataset-uuid>/snapshots/<snapshot-uuid>.json
+```
+
+New here? The [Getting Started guide](getting_started.md) walks through the whole flow
+step by step.
 
 ## Why dstrack?
 
-Data pipelines break silently. A column gets renamed upstream, a vendor changes a file format, or a feature distribution shifts after a data refresh — and you only find out when model accuracy drops in production.
+Data pipelines break silently. A column gets renamed upstream, a vendor changes a file format, or a feature distribution shifts after a data refresh - and you only find out when model accuracy drops in production.
 
 `dstrack` gives you an audit trail for your datasets so you can catch these problems early, understand what changed, and reproduce any past state of your data.
 

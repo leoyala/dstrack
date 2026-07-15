@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeAlias
 
-# (filename, lineno, funcname) — the key pstats uses to identify a profiled frame.
+# (filename, lineno, funcname) - the key pstats uses to identify a profiled frame.
 FrameKey: TypeAlias = tuple[str, int, str]
 # (primitive_calls, total_calls, total_time, cumulative_time)
 _FrameTotals: TypeAlias = tuple[int, int, float, float]
