@@ -1,7 +1,7 @@
 """Tests for the benchmark CLI in src/dstrack/_benchmark/_cli.py."""
 
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import ClassVar
 
@@ -24,12 +24,8 @@ runner = CliRunner()
 class _RecordingReporter:
     """Stands in for ConsoleReporter, recording what the CLI asked it to print."""
 
-    kept_paths: list[Path]
-    reported: list[tuple[BenchmarkRun, int]]
-
-    def __init__(self) -> None:
-        self.kept_paths = []
-        self.reported = []
+    kept_paths: list[Path] = field(default_factory=list)
+    reported: list[tuple[BenchmarkRun, int]] = field(default_factory=list)
 
     def report(self, run: BenchmarkRun, *, profile_limit: int) -> None:
         self.reported.append((run, profile_limit))
