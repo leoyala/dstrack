@@ -124,7 +124,7 @@ def _coerce(raw: str | None, dtype: str) -> Cell:
         if raw not in _BOOL_ALL:
             raise ValueError(f"Invalid boolean value for bool column: {raw!r}")
         return raw in _BOOL_TRUE
-    # string, datetime64, bytes — keep as str
+    # string, datetime64, bytes - keep as str
     return raw
 
 
