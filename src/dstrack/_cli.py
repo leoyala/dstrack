@@ -7,6 +7,7 @@ import typer
 
 from dstrack import __version__, console
 from dstrack._store_template import STORE_TEMPLATE, materialize
+from dstrack._track import track
 from dstrack.errors import StoreInitError
 from dstrack.utils import get_invocation_path
 
@@ -24,9 +25,9 @@ app = typer.Typer(
 def init_local_store() -> Path:
     """Initializes local store structure.
 
-    Builds `STORE_TEMPLATE` (see `_store_template.py`) in a temporary
-    directory next to the destination, and only moves it into place once
-    every file and directory in the template has been created successfully.
+    Builds [STORE_TEMPLATE][dstrack._store_template.STORE_TEMPLATE] in a
+    temporary directory next to the destination, and only moves it into place
+    once every file and directory in the template has been created successfully.
     The destination is therefore never touched by a failed or partial build.
 
     Returns:
@@ -82,6 +83,11 @@ def init(
         _log.error(f"Failed to create local store. {e}")
         console.error(str(e))
         raise
+
+
+app.command(help="Compute a snapshot of a dataset and store it in the local store.")(
+    track
+)
 
 
 @app.command(help="Print package version.")

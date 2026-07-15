@@ -1,4 +1,4 @@
-"""Resolution of the local store's directory, `STORE_DIRNAME/`.
+"""Resolution of the local store's directory, [STORE_DIRNAME][dstrack.paths.STORE_DIRNAME].
 
 Mirrors how git resolves `.git/`: absent an explicit override, it is found by
 walking up from the current directory until a `STORE_DIRNAME/` directory turns up.
@@ -55,7 +55,7 @@ def _find_store_root(start: Path) -> Path:
 
 
 def resolve_store_root(root: Path | str | None = None) -> Path:
-    """Resolve the path to the local store, `STORE_DIRNAME/`.
+    """Resolve the path to the local store, [STORE_DIRNAME][dstrack.paths.STORE_DIRNAME].
 
     Checked in order, the first one available wins:
         1. `root`, e.g. forwarded from a CLI `--root` option: the directory

@@ -6,7 +6,8 @@ configured here. Applications embedding dstrack are free to configure that
 hierarchy however they like: ``logging.basicConfig()``, attaching handlers to
 the root logger, or attaching handlers directly to ``logging.getLogger("dstrack")``.
 
-If the application does none of that, :class:`_DefaultHandler` prints
+If the application does none of that,
+[_DefaultHandler][dstrack._logging._DefaultHandler] prints
 ``WARNING``-and-above records to stderr with a sensible default format so
 messages are never silently dropped. It steps aside automatically the moment
 it detects that the application has configured logging itself.
@@ -40,12 +41,14 @@ def _configure_default_logging() -> None:
 
     Called once, at import time. The handler installed here checks, on every
     record, whether the application has since configured logging itself and
-    stays silent if so, see :meth:`_DefaultHandler.emit`.
+    stays silent if so, see
+    [_DefaultHandler.emit()][dstrack._logging._DefaultHandler.emit].
 
-    A no-op if a :class:`_DefaultHandler` is already attached: since two of
-    them would each treat the other as an application-supplied handler and
-    both step aside, re-running this (e.g. via ``importlib.reload`` under
-    Jupyter's autoreload) would otherwise silence dstrack's logging entirely.
+    A no-op if a [_DefaultHandler][dstrack._logging._DefaultHandler] is already
+    attached: since two of them would each treat the other as an
+    application-supplied handler and both step aside, re-running this (e.g. via
+    ``importlib.reload`` under Jupyter's autoreload) would otherwise silence
+    dstrack's logging entirely.
     """
     if any(isinstance(h, _DefaultHandler) for h in logger.handlers):
         return

@@ -131,14 +131,16 @@ def _coerce(raw: str | None, dtype: str) -> Cell:
 class CsvReader:
     """Reads a CSV file using the standard-library ``csv`` module.
 
-    Satisfies [TabularReader][dstrack.readers.TabularReader] without inheriting from
-    it.  Column dtypes are inferred from the first ``sample_rows`` data rows;
-    every subsequent call to [columns()][dstrack.readers.CsvReader.columns] returns the cached result.
+    Satisfies [TabularReader][dstrack.readers._protocol.TabularReader] without
+    inheriting from it.  Column dtypes are inferred from the first
+    ``sample_rows`` data rows; every subsequent call to
+    [columns()][dstrack.readers._csv.CsvReader.columns] returns the cached
+    result.
 
     The file's modification time and size are recorded when schema inference
-    runs.  [iter_batches()][dstrack.readers.CsvReader.iter_batches] checks them again before reading and raises
-    `RuntimeError` if the file has changed, preventing silent
-    schema/data mismatches.
+    runs.  [iter_batches()][dstrack.readers._csv.CsvReader.iter_batches] checks
+    them again before reading and raises [RuntimeError][] if the file has
+    changed, preventing silent schema/data mismatches.
 
     Note:
         Change detection relies on ``mtime_ns`` and file size reported by the
@@ -148,29 +150,49 @@ class CsvReader:
         also preserves the file size may go undetected.  If you need
         guaranteed detection in such environments, ensure at least one clock
         tick (≥ 10 ms on most systems) elapses between calling
-        [columns()][dstrack.readers.CsvReader.columns] and overwriting the file.
+        [columns()][dstrack.readers._csv.CsvReader.columns] and overwriting the
+        file.
 
     Args:
         path: Path to the CSV file.
         sample_rows: Number of rows to read for dtype inference.
             The values are read and data types for each column are inferred
             from them.
-        encoding: File encoding passed to :func:`open`.  Defaults to
+        encoding: File encoding passed to [open][].  Defaults to
             ``"utf-8"``; use ``"cp1252"`` or ``"latin-1"`` for Excel exports.
         rename_duplicates: When ``True``, duplicate header names are made unique
             by appending a counter suffix (e.g. ``col``, ``col_1``, ``col_2``).
             Headers that already appear exactly once in the file are treated as
             reserved: generated suffixes will never overwrite them (e.g.
             ``["a", "a", "a_1"]`` → ``["a", "a_2", "a_1"]``).
-            When ``False`` (default), a :exc:`ValueError` is raised instead.
+            When ``False`` (default), a [ValueError][] is raised instead.
         column_dtypes: Optional mapping of column name to dtype string that
             overrides the inferred dtype for those columns.  Only the listed
             columns are affected; all others are still inferred automatically.
             ``"bytes"`` is not a valid override (see ADR-0002); passing it
-            raises `ValueError`.
+            raises [ValueError][].
         **csv_kwargs: Forwarded verbatim to [DictReader][csv.DictReader]
             (e.g. ``delimiter=";"``, ``quotechar="'"``).
     """
+
+    EXTENSIONS = (".csv",)
+
+    @classmethod
+    def from_path(cls, path: str | Path) -> "CsvReader":
+        """Build a reader for ``path`` with default options.
+
+        Satisfies [ReaderFactory][dstrack.readers._protocol.ReaderFactory], which is how
+        the registry and ``--reader`` construct a reader they only know by name.
+        Options other than the path are not reachable this way; construct the
+        reader directly to set them.
+
+        Args:
+            path: Path to the CSV file.
+
+        Returns:
+            A [CsvReader][dstrack.readers._csv.CsvReader] bound to ``path``.
+        """
+        return cls(path)
 
     def __init__(
         self,
@@ -208,7 +230,8 @@ class CsvReader:
         """Return column descriptors, inferring dtypes on the first call.
 
         Returns:
-            Ordered list of [ColumnInfo][dstrack.readers.ColumnInfo] objects, one per CSV field.
+            Ordered list of [ColumnInfo][dstrack.readers._protocol.ColumnInfo]
+            objects, one per CSV field.
         """
         if self._columns is None:
             self._columns = self._detect_columns()
@@ -218,10 +241,12 @@ class CsvReader:
         """Read up to ``sample_rows`` rows and infer a ColumnInfo per field.
 
         Records ``(mtime_ns, size)`` of the open file handle in
-        ``_file_stat`` for later comparison by :meth:`iter_batches`.
+        ``_file_stat`` for later comparison by
+        [iter_batches()][dstrack.readers._csv.CsvReader.iter_batches].
 
         Returns:
-            Ordered list of [ColumnInfo][dstrack.readers.ColumnInfo] objects, one per CSV field.
+            Ordered list of [ColumnInfo][dstrack.readers._protocol.ColumnInfo]
+            objects, one per CSV field.
         """
         logger.debug(
             f"Inferring column dtypes for {self._path} from up to {self._sample_rows} sample rows",
@@ -273,12 +298,14 @@ class CsvReader:
             batch_size: Maximum number of rows per batch.
 
         Yields:
-            A list of rows; each row is a list of [Cell][dstrack.readers.Cell] values
-                aligned with [columns()][dstrack.readers.CsvReader.columns].
+            A list of rows; each row is a list of
+                [Cell][dstrack.readers._protocol.Cell] values aligned with
+                [columns()][dstrack.readers._csv.CsvReader.columns].
 
         Raises:
             RuntimeError: If the file was modified since
-                [columns()][dstrack.readers.CsvReader.columns] was last called.
+                [columns()][dstrack.readers._csv.CsvReader.columns] was last
+                called.
         """
         cols = self.columns()
         names = [c.name for c in cols]
