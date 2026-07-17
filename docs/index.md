@@ -5,7 +5,7 @@ icon: lucide/rocket
 # dstrack
 
 <figure markdown="span">
-  ![dstrack-logo](assets/dstrack-logo.png){ width="200" }
+  ![dstrack-logo](assets/dstrack-logo.png){ width="200" #dstrack-logo }
   <figcaption></figcaption>
 </figure>
 
