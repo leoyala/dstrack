@@ -14,6 +14,14 @@ A Python package for versioning and monitoring dataset changes throughout the ma
 
 `dstrack` helps data scientists and ML engineers track how datasets evolve over time, catching schema drift, distribution shifts, and unexpected mutations before they silently break pipelines or degrade model performance.
 
+## What dstrack is (and isn't)
+
+`dstrack` records *semantics* about a dataset - its schema, a content fingerprint, and per-column statistics - not the dataset itself.
+It is not a data version control system: unlike DVC, LakeFS, or Git LFS, it never copies your files into a store or pushes them to a
+remote, and it cannot check an old version of `data.csv` back out for you. Your data stays wherever it already lives, and `dstrack` keeps a small,
+human-readable audit trail beside your code so you can see how that data changed and when. If you need to store and retrieve the bytes, reach for
+DVC and use `dstrack` alongside it.
+
 ## Installation
 
 ```bash
