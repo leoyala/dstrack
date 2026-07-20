@@ -4,6 +4,7 @@ import json
 import shutil
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,6 +20,7 @@ from dstrack._log import (
     _known_datasets,
     _resolve_target,
 )
+from dstrack._log_render import _humanize
 from dstrack.errors import DatasetNotFoundError, StoreCorruptionError
 
 runner = CliRunner()
@@ -557,6 +559,31 @@ def test_log_reports_a_rebuilt_index(
 
     assert result.exit_code == 0, result.output
     assert "Rebuilt the snapshot index" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Relative timestamps (`_humanize`)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("age", "expected"),
+    [
+        (timedelta(seconds=1), "1 second ago"),
+        (timedelta(minutes=90), "1 hour ago"),
+        (timedelta(days=2), "2 days ago"),
+        (timedelta(days=400), "1 year ago"),
+        (timedelta(minutes=-1), "in 1 minute"),
+        (timedelta(days=-14), "in 2 weeks"),
+    ],
+)
+def test_humanize_uses_the_largest_unit_that_fits(
+    age: timedelta, expected: str
+) -> None:
+    """An age reads in whole units, and a future timestamp reads as `in ...`."""
+    now = datetime(2026, 7, 20, 12, 0, tzinfo=UTC)
+
+    assert _humanize((now - age).isoformat(), now) == expected
 
 
 def test_log_surfaces_a_corrupt_store(
