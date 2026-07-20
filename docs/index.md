@@ -17,7 +17,7 @@ icon: lucide/rocket
 
 Data pipelines break silently. A column gets renamed upstream, a vendor changes a file format, or a feature distribution shifts after a data refresh - and you only find out when model accuracy drops in production.
 
-`dstrack` gives you an audit trail for your datasets so you can catch these problems early, understand what changed, and reproduce any past state of your data.
+`dstrack` gives you an audit trail for your datasets so you can catch these problems early, understand what changed, and help you develop your datasets faster.
 
 ## What dstrack is (and isn't)
 
@@ -63,12 +63,6 @@ dstrack track data.csv
 
 New here? The [Getting Started guide](getting_started.md) walks through the whole flow
 step by step.
-
-## Why dstrack?
-
-Data pipelines break silently. A column gets renamed upstream, a vendor changes a file format, or a feature distribution shifts after a data refresh - and you only find out when model accuracy drops in production.
-
-`dstrack` gives you an audit trail for your datasets so you can catch these problems early, understand what changed, and reproduce any past state of your data.
 
 ## License
 

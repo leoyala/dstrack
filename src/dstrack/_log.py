@@ -90,7 +90,7 @@ def log(
 
         dataset_id = _resolve_target(target, store_root=store_root, root=root)
         history = cache.query_history(dataset_id, store_root=store_root)
-    except (DatasetNotFoundError, StoreCorruptionError, ValueError) as e:
+    except (DatasetNotFoundError, StoreCorruptionError, ValueError, OSError) as e:
         console.error(str(e))
         raise typer.Exit(code=1) from e
 
