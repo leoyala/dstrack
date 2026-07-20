@@ -10,6 +10,10 @@
 
 A Python package for versioning and monitoring dataset changes throughout the machine learning lifecycle.
 
+<p align="center">
+  <img src="docs/assets/cli.gif" alt="CLI example">
+</p>
+
 ## Overview
 
 `dstrack` helps data scientists and ML engineers track how datasets evolve over time, catching schema drift, distribution shifts, and unexpected mutations before they silently break pipelines or degrade model performance.
