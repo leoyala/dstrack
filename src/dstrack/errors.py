@@ -16,3 +16,7 @@ class DatasetNotFoundError(Exception):
 
 class InputTooLargeError(Exception):
     """Raised when a dataset exceeds the configured snapshot row limit."""
+
+
+class IndexUnusable(Exception):
+    """The index exists but cannot be queried, and must be rebuilt."""

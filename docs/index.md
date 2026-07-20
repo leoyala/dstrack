@@ -5,13 +5,27 @@ icon: lucide/rocket
 # dstrack
 
 <figure markdown="span">
-  ![dstrack-logo](assets/dstrack-logo.png){ width="200" }
+  ![dstrack-logo](assets/dstrack-logo.png){ width="200" #dstrack-logo }
   <figcaption></figcaption>
 </figure>
 
 **Dataset versioning and monitoring for the machine learning lifecycle.**
 
 `dstrack` helps data scientists and ML engineers track how datasets evolve over time - catching schema drift, distribution shifts, and unexpected mutations before they silently break pipelines or degrade model performance.
+
+## Why dstrack?
+
+Data pipelines break silently. A column gets renamed upstream, a vendor changes a file format, or a feature distribution shifts after a data refresh - and you only find out when model accuracy drops in production.
+
+`dstrack` gives you an audit trail for your datasets so you can catch these problems early, understand what changed, and reproduce any past state of your data.
+
+## What dstrack is (and isn't)
+
+`dstrack` records *semantics* about a dataset - its schema, a content fingerprint, and per-column statistics - not the dataset itself.
+It is not a data version control system: unlike DVC, LakeFS, or Git LFS, it never copies your files into a store or pushes them to a
+remote, and it cannot check an old version of `data.csv` back out for you. Your data stays wherever it already lives, and `dstrack` keeps a small,
+human-readable audit trail beside your code so you can see how that data changed and when. If you need to store and retrieve the bytes, reach for
+DVC and use `dstrack` alongside it.
 
 ## Features
 
