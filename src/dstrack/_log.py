@@ -1,6 +1,7 @@
 """The ``dstrack log`` command: show a tracked dataset's history."""
 
 import os
+import sqlite3
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -90,7 +91,13 @@ def log(
 
         dataset_id = _resolve_target(target, store_root=store_root, root=root)
         history = cache.query_history(dataset_id, store_root=store_root)
-    except (DatasetNotFoundError, StoreCorruptionError, ValueError, OSError) as e:
+    except (
+        DatasetNotFoundError,
+        StoreCorruptionError,
+        ValueError,
+        OSError,
+        sqlite3.DatabaseError,
+    ) as e:
         console.error(str(e))
         raise typer.Exit(code=1) from e
 
