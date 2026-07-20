@@ -6,6 +6,7 @@ from typing import Annotated
 import typer
 
 from dstrack import __version__, console
+from dstrack._log import log
 from dstrack._store_template import STORE_TEMPLATE, materialize
 from dstrack._track import track
 from dstrack.errors import StoreInitError
@@ -88,6 +89,11 @@ def init(
 app.command(help="Compute a snapshot of a dataset and store it in the local store.")(
     track
 )
+
+app.command(
+    help="Show the snapshot history of a tracked dataset, given its dataset id "
+    "or its path."
+)(log)
 
 
 @app.command(help="Print package version.")
