@@ -38,6 +38,11 @@ DVC and use `dstrack` alongside it.
     Change detection and drift monitoring - comparing snapshots to surface schema and
     distribution shifts - are planned. See the [roadmap](roadmap.md).
 
+<figure markdown="span">
+  ![CLI example](assets/cli.gif)
+  <figcaption></figcaption>
+</figure>
+
 ## Installation
 
 ```bash
