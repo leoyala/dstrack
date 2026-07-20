@@ -1,6 +1,7 @@
 """Tests for the `dstrack log` command in src/dstrack/_log.py."""
 
 import json
+import shutil
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -520,6 +521,27 @@ def test_known_datasets_marks_missing_fields(store_root: Path) -> None:
 
     assert dataset_id in listing
     assert "-" in listing
+
+
+def test_known_datasets_drops_a_dataset_deleted_from_the_store(
+    tmp_path: Path, store_root: Path
+) -> None:
+    """A dataset removed from the store is forgotten by the next sync.
+
+    The index outlives the logs it was built from, so a dataset directory
+    deleted by hand would otherwise keep being listed as if it existed.
+    """
+    removed_id = _track(store_root, _write_csv(tmp_path / "gone.csv"))
+    kept_id = _track(store_root, _write_csv(tmp_path / "kept.csv"))
+    cache.sync(store_root)
+    assert removed_id in _known_datasets(store_root)
+
+    shutil.rmtree(store_root / "datasets" / removed_id)
+    cache.sync(store_root)
+
+    listing = _known_datasets(store_root)
+    assert removed_id not in listing
+    assert kept_id in listing
 
 
 def test_log_reports_a_rebuilt_index(
