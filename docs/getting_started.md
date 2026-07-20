@@ -120,21 +120,66 @@ For more information on what `dstrack track` allows you to do, simply ask for th
 dstrack track --help
 ```
 
+## 4. View a dataset's history
+
+`dstrack log` shows a dataset's snapshots as a timeline, newest first. Point it at the
+dataset's path, and `dstrack` works out which dataset that is:
+
+```bash
+dstrack log data.csv
+```
+
+```text
+● a587afd9  Customers  HEAD
+│ 2 minutes ago  by you
+│ 4 rows +1   3 cols
+│ data.csv
+│
+● 605eb940  Customers
+│ 5 minutes ago  by you
+│ 3 rows +1   3 cols
+│ data.csv
+│
+● 0c82297f  Customers
+  1 hour ago  by you
+  2 rows   3 cols
+  data.csv
+```
+
+Each node is one snapshot, showing how its row and column counts changed from the
+snapshot below it. `HEAD` marks the latest.
+
+This is also how you find the `--dataset-id` the rename above needs: pass the path while
+it still matches, or list what the store knows by asking for a dataset that isn't there.
+A dataset id works anywhere a path does, and keeps working after the file is renamed,
+moved, or deleted:
+
+```bash
+dstrack log <dataset-uuid>
+```
+
+Useful flags: `-n 5` to show only the latest few, `--oneline` to condense each snapshot
+to a single line, and `--reverse` to read oldest-first.
+
 ## Where snapshots live
 
 Each snapshot is a JSON file under its dataset's directory:
 
 ```text
 .dstrack/
+├── .cache/
+│   └── index.db          # not committed; rebuilt on demand
 └── datasets/
     └── <dataset-uuid>/
+        ├── HEAD          # the latest snapshot
+        ├── log.jsonl     # append-only history, one line per snapshot
         └── snapshots/
             └── <snapshot-uuid>.json
 ```
 
-The store also keeps an append-only log and a `HEAD` pointer per dataset. `.dstrack/` is
-plain text and safe to commit alongside your code, giving you a versioned audit trail of
-how your datasets evolved.
+`.dstrack/` is plain text and safe to commit alongside your code, giving you a versioned
+audit trail of how your datasets evolved. The exception is `.cache/`, which holds only
+what can be derived from the logs beside it, and is gitignored for you.
 
 ## Benchmarking (optional)
 

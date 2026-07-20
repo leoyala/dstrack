@@ -25,7 +25,7 @@ Foundation for all future capabilities: reading a dataset and capturing an immut
 - [x] Schema extraction (column names and types)
 - [x] Per-column statistics (counts, ranges, null rates, etc.)
 - [x] `dstrack init` and `dstrack track` commands
-- [ ] `dstrack log` command
+- [x] `dstrack log` command
 
 ## v0.2 - Diff Engine
 

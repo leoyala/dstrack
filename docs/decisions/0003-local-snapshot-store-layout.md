@@ -44,9 +44,9 @@ number of files inside `.dstrack/` are the exception, see
 
 ```
 .dstrack/
-├── .gitignore                        # excludes cache/
-├── cache/
-│   └── index.db                      # gitignored: disposable search accelerator
+├── .gitignore                        # excludes .cache/
+├── .cache/
+│   └── index.db                      # gitignored: disposable query accelerator
 └── datasets/
     └── <dataset_id>/                 # dataset_id: UUID4, minted at first snapshot, permanent
         ├── HEAD                      # snapshot_id of the latest snapshot
@@ -73,14 +73,14 @@ satisfies both.
 ADR-0001; `dataset_id` groups all of a dataset's snapshots together.
 
 ### History and search: what's derived, what's not
-Two different jobs need two different mechanisms:
+Two different jobs are served by one mechanism:
 
-- **History of one dataset** (`dstrack log <dataset_id>`) only ever reads that
-  dataset's own `snapshots/`, so no index is needed to make it fast. `dstrack log <path>`
-  is also accepted, resolved to a `dataset_id` via the same path-matching used by
-  `dstrack track` (see [Path resolution](#path-resolution-relative-root-overridable-never-a-shared-pointer)); if
-  the path doesn't exactly match any dataset's last recorded one, `--dataset-id` is
-  required instead.
+- **History of one dataset** (`dstrack log <dataset_id>`) needs that dataset's
+  lineage, cheaply. `dstrack log <path>` is also accepted, resolved to a `dataset_id`
+  via the same path-matching used by `dstrack track` (see
+  [Path resolution](#path-resolution-relative-root-overridable-never-a-shared-pointer)); if
+  the path doesn't exactly match any dataset's last recorded one, the `dataset_id` must
+  be passed instead.
 - **Search across many datasets** (`dstrack search ...`, by name/tag/pipeline stage)
   would otherwise mean opening every dataset's snapshot JSON just to read its name or
   tags, files that may also contain large histograms and MinHash/HyperLogLog sketches
@@ -95,15 +95,24 @@ never drift apart.
 Anyone who clones or pulls the repo has identical, correct history immediately, with no
 rebuild step.
 
-`cache/index.db` (SQLite, stdlib `sqlite3`, no new dependency) is a pure performance
-accelerator for cross-dataset search, built by reading the small `log.jsonl` files,
-never the heavy snapshot JSON. It is **not** a second source of truth: it is gitignored
-and safe to delete at any time. Every `dstrack track` call appends its new row
-straight to the index, and every `dstrack search` also stats each dataset's `log.jsonl`
-first and re-syncs any lines it's missing (size/mtime tracked per dataset), so
-first-use, deletion, and pulls from other machines are all covered too. Between the
-two, a search can never see stale results, only, in the worst case, a slower one while
-it resyncs.
+`.cache/index.db` (SQLite, stdlib `sqlite3`, no new dependency) is a pure performance
+accelerator, built by reading the small `log.jsonl` files, never the heavy snapshot
+JSON. Both `dstrack log` and `dstrack search` query it. It is **not** a second source of
+truth: it is gitignored and safe to delete at any time.
+
+Reads re-sync before querying: each command stats every dataset's `log.jsonl` first
+(size/mtime tracked per dataset) and reimports the ones that changed, so first-use,
+deletion, and pulls from other machines are all covered. `dstrack track` therefore does
+not need to write to the index at all. A query can never see stale results, only, in the
+worst case, a slower one while it resyncs.
+
+**History is reachability, not file order.** `HEAD` is written after the `log.jsonl`
+append, so a crash between the two leaves an entry the store never committed, and the
+*next* successful `track` appends after it, stranding it mid-file. Reading the log
+top-to-bottom, or up to the `HEAD` line, would both present that entry as real history.
+So a dataset's history is derived by walking `parent_snapshot_id` back from `HEAD`, and
+entries that walk does not reach are ignored. This holds for the index too, which is
+built from the log and therefore inherits its unreachable entries.
 
 ### Path resolution: relative, root-overridable, never a shared pointer
 Every snapshot's `dataset_path` (ADR-0001) is stored relative to a *path root*, always
@@ -192,7 +201,7 @@ is the supported answer.
 | `datasets/<dataset_id>/snapshots/*.json` | Yes | Source of truth for snapshot content |
 | `datasets/<dataset_id>/log.jsonl` | Yes | Source of truth for history; small and append-only |
 | `datasets/<dataset_id>/HEAD` | Yes | Small pointer; part of the same atomic write as the above |
-| `cache/index.db` | No | Disposable, rebuildable search index |
+| `.cache/index.db` | No | Disposable, rebuildable query index |
 
 ## Example walkthrough
 
@@ -257,13 +266,14 @@ recorded in `log.jsonl`, not reconciled against anyone else's path. Their next
 snapshot of that same file can drop `--dataset-id`, since it will now match their own
 machine's most recent recorded path.
 
-Finally, both `dstrack log 8f14e45f-...` (reads `log.jsonl` directly, three entries,
-no `cache/index.db` involved) and `dstrack search --tag pipeline_stage=raw` (built from
-`cache/index.db`, rebuilt from `log.jsonl` if the cache is missing or was never built on
-this machine) return the same answer regardless of which machine ran them.
+Finally, both `dstrack log 8f14e45f-...` (three entries, walked back from `HEAD`) and
+`dstrack search --tag pipeline_stage=raw` return the same answer regardless of which
+machine ran them: both query `.cache/index.db`, which is built from `log.jsonl` and
+re-synced from it on every read, so a machine that has never built the index and a
+machine whose index predates a `git pull` both still answer from the committed logs.
 
 ## Consequences
-- `.dstrack/` is committed to git by default; only `cache/` is gitignored. Cloning the
+- `.dstrack/` is committed to git by default; only `.cache/` is gitignored. Cloning the
   repo is sufficient to get full, correct dataset history, no rebuild, fetch, or
   config step required.
 - Dataset identity is a permanent `dataset_id` (UUID4), independent of both the file's
@@ -279,8 +289,11 @@ this machine) return the same answer regardless of which machine ran them.
 - `log.jsonl` and `snapshots/*.json` must be written together, atomically, by the same
   operation. A store writer that fails to keep them in sync produces an inconsistent
   dataset history; this is an implementation invariant, not just a convention.
-- `cache/index.db` can be deleted at any time with no data loss, only a slower next
-  search until it's rebuilt.
+- `.cache/index.db` can be deleted at any time with no data loss, only a slower next
+  query until it's rebuilt.
+- A dataset's history is what is reachable from `HEAD`, never what the log file happens
+  to contain. Any reader that trusts file order will surface snapshots the store never
+  committed; this is an implementation invariant, not a convention.
 - No reader information is ever written to the store, and no future field may reintroduce
   it: because `.dstrack/` is committed, an importable path read back out of it would
   execute code chosen by whoever authored the commit. Readers reach `dstrack` from the
