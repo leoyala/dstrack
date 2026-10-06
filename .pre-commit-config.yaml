@@ -74,7 +74,7 @@ repos:
   # Lint (with --fix) MUST run before the formatter.
   # ---------------------------------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.6
+    rev: v0.16.10
     hooks:
       - id: ruff-check
         args: [--fix]
@@ -86,7 +86,7 @@ repos:
   # Static type checking (run on the package source only, to stay fast).
   # ---------------------------------------------------------------------------
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.3.1
+    rev: v2.4.0
     hooks:
       - id: mypy
         files: ^src/
@@ -129,6 +129,6 @@ repos:
   # ---------------------------------------------------------------------------
   - repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
-    rev: 0.12.10
+    rev: 0.12.23
     hooks:
       - id: uv-lock
