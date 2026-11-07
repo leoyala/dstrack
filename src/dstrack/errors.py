@@ -14,9 +14,25 @@ class DatasetNotFoundError(Exception):
     """Raised when a named dataset does not exist in the local store."""
 
 
+class SnapshotNotFoundError(Exception):
+    """Raised when a snapshot cannot be located in the local store."""
+
+
+class AmbiguousSnapshotError(Exception):
+    """Raised when a short snapshot id prefix matches more than one snapshot."""
+
+
+class IncompatibleSnapshotError(Exception):
+    """Raised when a snapshot's format version cannot be compared."""
+
+
 class InputTooLargeError(Exception):
     """Raised when a dataset exceeds the configured snapshot row limit."""
 
 
 class IndexUnusable(Exception):
     """The index exists but cannot be queried, and must be rebuilt."""
+
+
+class MissingDependencyError(Exception):
+    """Raised when an optional feature's dependency is not installed."""

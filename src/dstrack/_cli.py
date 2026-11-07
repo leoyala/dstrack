@@ -6,6 +6,7 @@ from typing import Annotated
 import typer
 
 from dstrack import __version__, console
+from dstrack._diff import diff
 from dstrack._log import log
 from dstrack._store_template import STORE_TEMPLATE, materialize
 from dstrack._track import track
@@ -94,6 +95,13 @@ app.command(
     help="Show the snapshot history of a tracked dataset, given its dataset id "
     "or its path."
 )(log)
+
+app.command(
+    help="Compare two snapshots and show what changed between them, side by "
+    "side. Each argument may be a snapshot id, a dataset id, or the path to a "
+    "tracked dataset; given one, it is compared against the snapshot it "
+    "succeeded."
+)(diff)
 
 
 @app.command(help="Print package version.")

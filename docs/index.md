@@ -43,6 +43,12 @@ DVC and use `dstrack` alongside it.
   <figcaption></figcaption>
 </figure>
 
+!!! example "Exemplary PDF diff report"
+    <figure markdown="span">
+    ![Diff PDF report](assets/diff-report.png)
+    <figcaption>Exemplary PDF report (1st page only)</figcaption>
+    </figure>
+
 ## Installation
 
 ```bash

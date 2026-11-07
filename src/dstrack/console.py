@@ -27,6 +27,16 @@ def display(renderable: RenderableType) -> None:
     console.print(renderable)
 
 
+def width() -> int:
+    """Return the console's current width in cells.
+
+    For output whose layout has to adapt to the terminal. Reading it here
+    rather than inside a renderer keeps the renderer a pure function of its
+    arguments, and so testable at any width.
+    """
+    return console.width
+
+
 def success(message: str) -> None:
     """Print a success message prefixed with a check mark."""
     console.print(f"[bold green]\N{HEAVY CHECK MARK}[/bold green] {escape(message)}")
