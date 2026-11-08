@@ -1,6 +1,7 @@
 """Tests for the `dstrack diff` command in src/dstrack/_diff.py."""
 
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -283,8 +284,55 @@ def test_an_unknown_sensitivity_lists_the_ones_that_exist(
 
 
 # ---------------------------------------------------------------------------
+# PDF report
+# ---------------------------------------------------------------------------
+
+
+def test_pdf_writes_the_report_to_the_given_path(
+    tmp_path: Path, store_root: Path, tracked: Path
+) -> None:
+    """`--pdf` leaves a real PDF behind and still exits cleanly."""
+    pytest.importorskip("reportlab", reason="the `report` extra is not installed")
+    report = tmp_path / "diff.pdf"
+
+    result = _diff(str(tracked), "--pdf", str(report))
+
+    assert result.exit_code == 0, result.output
+    assert report.read_bytes().startswith(b"%PDF")
+
+
+def test_pdf_without_the_report_extra_fails_the_command(
+    tmp_path: Path,
+    store_root: Path,
+    tracked: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A report that was asked for and not written must not look like success."""
+    monkeypatch.setitem(sys.modules, "reportlab", None)
+    monkeypatch.setitem(sys.modules, "reportlab.lib", None)
+
+    result = _diff(str(tracked), "--pdf", str(tmp_path / "diff.pdf"))
+
+    assert result.exit_code == 1
+    assert "dstrack[report]" in result.output
+
+
+# ---------------------------------------------------------------------------
 # Failures
 # ---------------------------------------------------------------------------
+
+
+def test_diff_outside_a_store_says_how_to_create_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no `.dstrack/` to read, the error points at `dstrack init`."""
+    monkeypatch.delenv("DSTRACK_ROOT_PATH", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    result = _diff("data.csv")
+
+    assert result.exit_code == 1
+    assert "dstrack init" in result.output
 
 
 def test_an_unknown_target_lists_the_known_datasets(

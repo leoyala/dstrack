@@ -121,15 +121,21 @@ def test_reading_a_snapshot_that_is_not_there_says_so(store_root: Path) -> None:
         store.read_snapshot(dataset_id, str(uuid.uuid4()), store_root=store_root)
 
 
-def test_a_payload_that_is_not_an_object_is_corruption(store_root: Path) -> None:
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [("[1, 2, 3]", "JSON object"), ("{oops", "not valid JSON")],
+)
+def test_a_damaged_payload_is_corruption(
+    store_root: Path, content: str, message: str
+) -> None:
     """The store wrote an object; anything else means the file was damaged."""
     dataset_id = str(uuid.uuid4())
     snapshot_id = str(uuid.uuid4())
     snapshots = store_root / "datasets" / dataset_id / "snapshots"
     snapshots.mkdir(parents=True)
-    (snapshots / f"{snapshot_id}.json").write_text("[1, 2, 3]", encoding="utf-8")
+    (snapshots / f"{snapshot_id}.json").write_text(content, encoding="utf-8")
 
-    with pytest.raises(StoreCorruptionError, match="JSON object"):
+    with pytest.raises(StoreCorruptionError, match=message):
         store.read_snapshot(dataset_id, snapshot_id, store_root=store_root)
 
 

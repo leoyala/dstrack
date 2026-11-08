@@ -246,6 +246,21 @@ def test_a_long_list_of_schema_changes_is_capped() -> None:
     assert "and 7 more" in output
 
 
+def test_a_set_change_names_the_columns_that_joined_and_left() -> None:
+    """Which columns went constant matters more than how many did."""
+    old = _payload(constant_columns=["price"])
+    new = _payload(
+        snapshot_id="22222222-2222-4222-8222-222222222222",
+        constant_columns=["city"],
+    )
+
+    output = _render(diff_snapshots(old, new))
+
+    assert "Column sets" in output
+    assert "+city" in output
+    assert "-price" in output
+
+
 def test_comparing_two_datasets_is_called_out(tmp_path: object) -> None:
     """A cross-dataset comparison is legitimate, but the reader should know."""
     diff = diff_snapshots(

@@ -13,6 +13,7 @@ from dstrack.diff import (
     preset,
 )
 from dstrack.diff._engine import _redistribute
+from dstrack.diff._extract import column_kind
 from dstrack.diff._model import DiffOptions
 from dstrack.errors import IncompatibleSnapshotError
 
@@ -363,6 +364,22 @@ def test_counts_are_redistributed_onto_a_shared_grid_without_loss() -> None:
     assert len(spread) == 6
 
 
+@pytest.mark.parametrize(
+    ("edges", "counts", "expected"),
+    [
+        pytest.param(
+            [0.0, 1.0, 1.0, 2.0], [1.0, 5.0, 1.0], [1.0, 6.0], id="interior-edge"
+        ),
+        pytest.param([0.0, 2.0, 2.0], [2.0, 3.0], [1.0, 4.0], id="final-edge"),
+    ],
+)
+def test_a_zero_width_bin_keeps_its_whole_count(
+    edges: list[float], counts: list[float], expected: list[float]
+) -> None:
+    """A bin overlapping nothing by width still lands in the bin holding its edge."""
+    assert _redistribute(edges, counts, [0.0, 1.0, 2.0]) == pytest.approx(expected)
+
+
 def test_histograms_with_different_edges_still_compare() -> None:
     """Each snapshot derives its edges from its own range, so they rarely align."""
     new = _mutate()
@@ -379,15 +396,22 @@ def test_histograms_with_different_edges_still_compare() -> None:
     assert column.distribution_shift.score is not None
 
 
-def test_a_degenerate_histogram_falls_back_to_percentiles() -> None:
-    """A constant column's single bin carries no shape to compare."""
+@pytest.mark.parametrize(
+    "histogram",
+    [
+        pytest.param({"bin_edges": [3.0, 4.0], "counts": [1000]}, id="single-bin"),
+        pytest.param("not a mapping", id="not-a-mapping"),
+        pytest.param({"bin_edges": ["x", 1.0], "counts": [1]}, id="bad-edge"),
+        pytest.param({"bin_edges": [0.0, 1.0, 2.0], "counts": [1]}, id="short-counts"),
+        pytest.param({"bin_edges": [2.0, 1.0, 0.0], "counts": [1, 1]}, id="descending"),
+    ],
+)
+def test_an_unusable_histogram_falls_back_to_percentiles(histogram: Any) -> None:
+    """A histogram with no comparable shape must not stop the column comparing."""
     old = _mutate()
     new = _mutate()
     for payload in (old, new):
-        payload["column_stats"]["price"]["histogram"] = {
-            "bin_edges": [3.0, 4.0],
-            "counts": [1000],
-        }
+        payload["column_stats"]["price"]["histogram"] = histogram
     new["column_stats"]["price"]["percentiles"]["p50"] = 14.0
 
     result = diff_snapshots(old, new)
@@ -396,6 +420,53 @@ def test_a_degenerate_histogram_falls_back_to_percentiles() -> None:
     assert column.distribution_shift is not None
     assert column.distribution_shift.method is ShiftMethod.PERCENTILE_SHIFT
     assert column.distribution_shift.detail is not None
+
+
+def test_a_column_with_no_usable_distribution_reports_no_shift() -> None:
+    """With neither histogram nor percentiles, no shift score is invented."""
+    old = _mutate()
+    new = _mutate()
+    for payload in (old, new):
+        stats = payload["column_stats"]["price"]
+        del stats["histogram"]
+        stats["percentiles"] = {"p50": "unreadable"}
+
+    result = diff_snapshots(old, new)
+
+    column = next(c for c in result.columns if c.name == "price")
+    assert column.distribution_shift is not None
+    assert column.distribution_shift.method is ShiftMethod.NONE
+    assert column.distribution_shift.score is None
+
+
+def test_a_missing_row_count_is_noted_on_the_category_shift() -> None:
+    """Shares computed without a row count are weaker, and the result says so."""
+    old = _mutate(num_rows=None)
+    new = _mutate(num_rows=None)
+    new["column_stats"]["city"]["top_values"] = {"NY": 100, "LA": 900}
+
+    result = diff_snapshots(old, new)
+
+    column = next(c for c in result.columns if c.name == "city")
+    assert column.distribution_shift is not None
+    assert "row count unavailable" in (column.distribution_shift.detail or "")
+
+
+@pytest.mark.parametrize(
+    ("stats", "dtype", "expected"),
+    [
+        ({"null_count": 0}, "string", ColumnKind.STRING),
+        ({"null_count": 0}, "datetime64[ns]", ColumnKind.DATETIME),
+        ({"null_count": 0}, "category", ColumnKind.OTHER),
+        ({"null_count": 0}, None, ColumnKind.OTHER),
+        (None, None, ColumnKind.UNKNOWN),
+    ],
+)
+def test_a_column_without_stat_markers_is_classified_by_its_dtype(
+    stats: dict[str, Any] | None, dtype: str | None, expected: ColumnKind
+) -> None:
+    """With no variant-specific keys to go on, the declared dtype decides."""
+    assert column_kind(stats, dtype) is expected
 
 
 def test_a_new_dominant_category_shifts_a_text_column() -> None:
@@ -594,6 +665,8 @@ def test_a_payload_recording_no_format_version_is_accepted() -> None:
         {"columns": "not a list"},
         {"constant_columns": {"not": "a list"}},
         {"column_stats": {"a": {"mean": None, "histogram": {"bin_edges": "x"}}}},
+        {"columns": ["not a mapping", {"name": "a"}, {"name": "a"}]},
+        {"column_stats": {"city": {"top_values": "not a mapping"}}},
     ],
 )
 def test_a_malformed_payload_degrades_rather_than_raises(

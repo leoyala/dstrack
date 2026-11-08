@@ -205,6 +205,33 @@ def test_a_kind_change_is_not_called_a_presence_change(tmp_path: Path) -> None:
     assert "presence changed" not in _text(path.read_bytes())
 
 
+def test_schema_changes_are_tabulated_by_kind(tmp_path: Path) -> None:
+    """A dropped or retyped column breaks readers, so the report must list it."""
+    path = tmp_path / "schema.pdf"
+    old, new = _payload(columns=2), _payload(columns=2)
+    new["columns"][0]["dtype"] = "int64"
+    new["columns"][1]["name"] = "renamed"
+    new["column_stats"]["renamed"] = new["column_stats"].pop("col1")
+
+    write_pdf_report(diff_snapshots(old, new), path, now=NOW)
+
+    text = _text(path.read_bytes())
+    assert "Schema changes" in text
+    for drawn in ("Added", "renamed", "Removed", "col1", "Type changed", "col0"):
+        assert drawn in text, f"{drawn!r} should appear in the schema table"
+
+
+def test_a_set_change_is_described_in_words(tmp_path: Path) -> None:
+    """The report names the columns that joined and left a tracked set."""
+    path = tmp_path / "sets.pdf"
+    old = _payload(columns=2, constant_columns=["col0"])
+    new = _payload(columns=2, constant_columns=["col1"])
+
+    write_pdf_report(diff_snapshots(old, new), path, now=NOW)
+
+    assert "joined by col1, left by col0" in _text(path.read_bytes())
+
+
 # ---------------------------------------------------------------------------
 # Escaping
 # ---------------------------------------------------------------------------
