@@ -113,6 +113,37 @@ def test_a_narrow_terminal_stacks_each_column_instead_of_tabulating() -> None:
     assert max(len(line) for line in narrow.splitlines()) <= 60
 
 
+@pytest.mark.parametrize("width", [160, 120, 60])
+def test_a_moved_datetime_bound_reads_as_a_timestamp(width: int) -> None:
+    """Epoch seconds say nothing about which time window a column covers."""
+
+    def _window(start: str, end: str) -> dict[str, Any]:
+        return _payload(
+            columns=[{"name": "ts", "dtype": "datetime64", "nullable": True}],
+            num_columns=1,
+            column_stats={
+                "ts": {
+                    "null_count": 0,
+                    "null_fraction": 0.0,
+                    "min": start,
+                    "max": end,
+                    "range_days": 365.0,
+                }
+            },
+        )
+
+    diff = diff_snapshots(
+        _window("2024-01-01T00:00:00Z", "2024-12-31T00:00:00Z"),
+        _window("2024-01-02T00:00:00Z", "2025-01-01T00:00:00Z"),
+    )
+
+    output = _render(diff, width=width)
+
+    for day in ("2024-01-01", "2024-01-02", "2024-12-31", "2025-01-01"):
+        assert day in output
+    assert "1,704,067,200" not in output
+
+
 def _numeric_header(output: str) -> str:
     """Return the header row of the numeric column table."""
     lines = output.splitlines()

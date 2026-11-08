@@ -129,6 +129,37 @@ def test_a_report_is_a_readable_pdf(tmp_path: Path) -> None:
     assert _pages(content) >= 1
 
 
+def test_a_moved_datetime_bound_reads_as_a_timestamp(tmp_path: Path) -> None:
+    """Epoch seconds say nothing about which time window a column covers."""
+
+    def _window(start: str, end: str) -> dict[str, Any]:
+        payload = _payload(1)
+        payload["columns"] = [{"name": "ts", "dtype": "datetime64", "nullable": True}]
+        payload["column_stats"] = {
+            "ts": {
+                "null_count": 0,
+                "null_fraction": 0.0,
+                "min": start,
+                "max": end,
+                "range_days": 365.0,
+            }
+        }
+        return payload
+
+    diff = diff_snapshots(
+        _window("2024-01-01T00:00:00Z", "2024-12-31T00:00:00Z"),
+        _window("2024-01-02T00:00:00Z", "2025-01-01T00:00:00Z"),
+    )
+    path = tmp_path / "diff.pdf"
+
+    write_pdf_report(diff, path, now=NOW)
+
+    text = _text(path.read_bytes())
+    for day in ("2024-01-01", "2024-01-02", "2024-12-31", "2025-01-01"):
+        assert day in text
+    assert "1,704,067,200" not in text
+
+
 def test_an_unchanged_comparison_still_produces_a_report(tmp_path: Path) -> None:
     """ "Nothing changed" is a result worth reporting, not a reason to fail."""
     path = tmp_path / "same.pdf"

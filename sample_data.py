@@ -40,6 +40,8 @@ def _path(file: str) -> Path:
     path = DATA_DIR / file
     if not path.resolve().is_relative_to(DATA_DIR.resolve()):
         raise typer.BadParameter(f"{file!r} resolves outside {DATA_DIR}/.")
+    if path.is_dir():
+        raise typer.BadParameter(f"{file!r} is a directory, not a file.")
     return path
 
 
@@ -100,13 +102,15 @@ def modify(
     fields, data = _read(path)
     changes: list[str] = []
 
+    # Compute before dropping so new ids never reuse a dropped row's id.
+    next_id = max((int(row["id"]) for row in data if row.get("id")), default=0) + 1
+
     # Drop a few rows.
     dropped = rng.sample(range(len(data)), k=min(3, len(data)))
     data = [row for i, row in enumerate(data) if i not in dropped]
     changes.append(f"dropped {len(dropped)} rows")
 
     # Append new rows, continuing the id sequence.
-    next_id = max((int(row["id"]) for row in data if row.get("id")), default=0) + 1
     added = rng.randint(3, 8)
     for i in range(added):
         new = _row(rng, next_id + i)
@@ -143,9 +147,10 @@ def modify(
         changes.append("made is_active constant (all true)")
     if "signup_date" in fields:
         blanked = rng.sample(range(len(data)), k=len(data) * 3 // 4)
+        changed = sum(bool(data[i]["signup_date"]) for i in blanked)
         for i in blanked:
             data[i]["signup_date"] = ""
-        changes.append(f"nulled {len(blanked)} signup dates (>50% null)")
+        changes.append(f"nulled {changed} signup dates (>50% null)")
 
     # Schema: add a country column the first time, drop it the next.
     if schema:

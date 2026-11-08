@@ -75,17 +75,19 @@ CREATE TABLE snapshots (
 
 CREATE INDEX idx_snapshots_dataset ON snapshots(dataset_id);
 
--- Snapshots reachable from a dataset's HEAD. UNION, not UNION ALL, so that a
--- looped lineage still terminates.
+-- Snapshots reachable from a dataset's HEAD, without leaving that dataset: a
+-- parent link naming another dataset's snapshot is not part of this lineage.
+-- UNION, not UNION ALL, so that a looped lineage still terminates.
 CREATE VIEW committed_snapshots AS
-WITH RECURSIVE reachable(snapshot_id) AS (
-    SELECT head_snapshot_id FROM datasets WHERE head_snapshot_id IS NOT NULL
+WITH RECURSIVE reachable(dataset_id, snapshot_id) AS (
+    SELECT dataset_id, head_snapshot_id FROM datasets WHERE head_snapshot_id IS NOT NULL
     UNION
-    SELECT s.parent_snapshot_id FROM snapshots s
-    JOIN reachable r ON s.snapshot_id = r.snapshot_id
+    SELECT r.dataset_id, s.parent_snapshot_id FROM snapshots s
+    JOIN reachable r ON s.snapshot_id = r.snapshot_id AND s.dataset_id = r.dataset_id
     WHERE s.parent_snapshot_id IS NOT NULL
 )
-SELECT s.* FROM snapshots s JOIN reachable r ON r.snapshot_id = s.snapshot_id;
+SELECT s.* FROM snapshots s
+JOIN reachable r ON r.snapshot_id = s.snapshot_id AND r.dataset_id = s.dataset_id;
 """
 
 _SNAPSHOT_COLUMNS: Final = (

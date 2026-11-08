@@ -160,6 +160,10 @@ class MetricDiff:
         pct_change: ``delta / abs(old)``, or ``None`` when `old` is zero or
             either side is missing. A fraction, not a percentage.
         severity: How the change classifies under the active options.
+        old_display: How to show `old` when the number is not what a reader
+            wants, as for a datetime bound held in epoch seconds. ``None``
+            means format the number.
+        new_display: The same for `new`.
     """
 
     key: str
@@ -168,6 +172,8 @@ class MetricDiff:
     delta: float | None
     pct_change: float | None
     severity: Severity
+    old_display: str | None = None
+    new_display: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,7 +342,8 @@ class DiffOptions:
 
     Attributes:
         rel_tolerance: Relative difference below which two numbers count as
-            equal.
+            equal. Not applied to a datetime column's ``min`` and ``max``: as
+            epoch seconds, it would hide shifts of several days.
         abs_tolerance: Absolute difference below which two numbers count as
             equal; covers comparisons against zero, where a relative
             tolerance is meaningless.

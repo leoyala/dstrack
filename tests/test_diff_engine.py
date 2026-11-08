@@ -7,6 +7,7 @@ import pytest
 
 from dstrack.diff import (
     ColumnKind,
+    DistributionShift,
     Severity,
     ShiftMethod,
     diff_snapshots,
@@ -533,6 +534,59 @@ def test_impossible_top_values_are_unmeasurable_not_scored(
     assert column.distribution_shift.detail is not None
 
 
+def _city_shift(old: dict[str, Any], new: dict[str, Any]) -> DistributionShift:
+    """Diff two payloads and return the `city` column's shift."""
+    result = diff_snapshots(old, new)
+    shift = next(c for c in result.columns if c.name == "city").distribution_shift
+    assert shift is not None
+    return shift
+
+
+@pytest.mark.parametrize("num_rows", [100, None], ids=["with-rows", "without-rows"])
+def test_counts_with_zero_coverage_are_not_scored(num_rows: int | None) -> None:
+    """Counted mass plus a full tail would otherwise score a TVD above 1."""
+    old = _mutate(num_rows=num_rows)
+    old["column_stats"]["city"]["top_values"] = {"A": 100}
+    old["column_stats"]["city"]["top_values_coverage"] = 0.0
+    new = _mutate(num_rows=num_rows)
+    new["column_stats"]["city"]["top_values"] = {"B": 100}
+
+    shift = _city_shift(old, new)
+
+    assert shift.score is None
+    assert shift.severity is Severity.UNCHANGED
+    assert "coverage disagrees" in (shift.detail or "")
+
+
+@pytest.mark.parametrize(
+    ("top_values", "coverage"),
+    [({"A": 50}, 1.0), ({"A": 100}, 0.5)],
+    ids=["coverage-above-counts", "coverage-below-counts"],
+)
+def test_coverage_that_contradicts_the_row_count_is_not_scored(
+    top_values: dict[str, int], coverage: float
+) -> None:
+    """Shares come from the row count and the tail from coverage; both must agree."""
+    old = _mutate(num_rows=100)
+    old["column_stats"]["city"]["top_values"] = top_values
+    old["column_stats"]["city"]["top_values_coverage"] = coverage
+    new = _mutate(num_rows=100)
+    new["column_stats"]["city"]["top_values"] = {"B": 100}
+
+    assert _city_shift(old, new).score is None
+
+
+def test_coverage_within_rounding_is_scored_and_stays_bounded() -> None:
+    """Float noise is not corruption, and must not push the score past 1."""
+    old = _mutate(num_rows=100)
+    old["column_stats"]["city"]["top_values"] = {"A": 100}
+    old["column_stats"]["city"]["top_values_coverage"] = 1.0 - 5e-7
+    new = _mutate(num_rows=100)
+    new["column_stats"]["city"]["top_values"] = {"B": 100}
+
+    assert _city_shift(old, new).score == 1.0
+
+
 # ---------------------------------------------------------------------------
 # Column kinds
 # ---------------------------------------------------------------------------
@@ -558,28 +612,84 @@ def test_a_column_that_changed_kind_is_critical_and_barely_comparable() -> None:
     assert column.distribution_shift is None
 
 
+def _datetime_window(start: str, end: str) -> dict[str, Any]:
+    """Build a payload whose only column spans 365 days from `start` to `end`."""
+    payload = _mutate(
+        columns=[{"name": "ts", "dtype": "datetime64", "nullable": True}],
+        num_columns=1,
+    )
+    payload["column_stats"] = {
+        "ts": {
+            "null_count": 0,
+            "null_fraction": 0.0,
+            "min": start,
+            "max": end,
+            "range_days": 365.0,
+        }
+    }
+    return payload
+
+
+def test_shifting_both_datetime_bounds_by_one_day_is_detected() -> None:
+    """A day is far below any tolerance taken relative to the epoch."""
+    result = diff_snapshots(
+        _datetime_window("2024-01-01T00:00:00Z", "2024-12-31T00:00:00Z"),
+        _datetime_window("2024-01-02T00:00:00Z", "2025-01-01T00:00:00Z"),
+    )
+
+    column = next(c for c in result.columns if c.name == "ts")
+    by_key = {m.key: m for m in column.metrics}
+    assert by_key["range_days"].severity is Severity.UNCHANGED
+    assert by_key["min"].delta == pytest.approx(86400.0)
+    assert by_key["max"].delta == pytest.approx(86400.0)
+    assert by_key["min"].severity is not Severity.UNCHANGED
+    assert by_key["max"].severity is not Severity.UNCHANGED
+    assert column.severity is not Severity.UNCHANGED
+    assert result.identical is False
+
+
+@pytest.mark.parametrize(
+    ("recorded", "shown"),
+    [
+        ("2024-01-01T00:00:00Z", "2024-01-01 00:00:00Z"),
+        ("2024-01-01T06:30:00+05:30", "2024-01-01 06:30:00+05:30"),
+        ("2024-01-01T00:00:00", "2024-01-01 00:00:00"),
+        ("2024-01-01", "2024-01-01 00:00:00"),
+    ],
+)
+def test_datetime_bounds_keep_the_moment_they_recorded(
+    recorded: str, shown: str
+) -> None:
+    """A bound is displayed as written, whatever zone the machine is in."""
+    result = diff_snapshots(
+        _datetime_window(recorded, "2024-12-31T00:00:00Z"),
+        _datetime_window("2023-06-01T00:00:00Z", "2024-12-31T00:00:00Z"),
+    )
+
+    column = next(c for c in result.columns if c.name == "ts")
+    by_key = {m.key: m for m in column.metrics}
+    assert by_key["min"].old_display == shown
+    assert by_key["min"].new_display == "2023-06-01 00:00:00Z"
+
+
+def test_only_datetime_bounds_carry_a_display_form() -> None:
+    """A numeric column's min and max are numbers, and read as numbers."""
+    new = _mutate()
+    new["column_stats"]["price"]["min"] = 5.0
+
+    result = diff_snapshots(_payload(), new)
+
+    price = next(c for c in result.columns if c.name == "price")
+    minimum = next(m for m in price.metrics if m.key == "min")
+    assert minimum.old_display is None
+    assert minimum.new_display is None
+
+
 def test_shifting_both_datetime_bounds_is_a_change_even_at_equal_duration() -> None:
     """A window that slid forward is not the window that was recorded."""
-
-    def _window(start: str, end: str) -> dict[str, Any]:
-        payload = _mutate(
-            columns=[{"name": "ts", "dtype": "datetime64", "nullable": True}],
-            num_columns=1,
-        )
-        payload["column_stats"] = {
-            "ts": {
-                "null_count": 0,
-                "null_fraction": 0.0,
-                "min": start,
-                "max": end,
-                "range_days": 365.0,
-            }
-        }
-        return payload
-
     result = diff_snapshots(
-        _window("2024-01-01T00:00:00Z", "2024-12-31T00:00:00Z"),
-        _window("2025-01-01T00:00:00Z", "2025-12-31T00:00:00Z"),
+        _datetime_window("2024-01-01T00:00:00Z", "2024-12-31T00:00:00Z"),
+        _datetime_window("2025-01-01T00:00:00Z", "2025-12-31T00:00:00Z"),
     )
 
     column = next(c for c in result.columns if c.name == "ts")

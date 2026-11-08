@@ -555,29 +555,33 @@ def _column_sections(
                 omitted = [
                     metric
                     for metric in column.metrics
-                    if metric.severity is not Severity.UNCHANGED
+                    if (show_unchanged or metric.severity is not Severity.UNCHANGED)
                     and metric.key not in shown_keys
                 ]
                 if omitted:
                     hidden.append((column, omitted))
 
     if hidden:
-        sections.extend(_omitted_section(hidden))
+        sections.extend(_omitted_section(hidden, show_unchanged=show_unchanged))
     return sections
 
 
 def _omitted_section(
     hidden: Sequence[tuple[ColumnStatDiff, Sequence[MetricDiff]]],
+    *,
+    show_unchanged: bool = False,
 ) -> list[RenderableType]:
-    """Render changed measurements that the column tables have no cell for.
+    """Render measurements that the column tables have no cell for.
 
     A column can be flagged because of a measurement the table does not carry
     (a high percentile, a token count). Without this the flag has no visible
-    cause. Only measurements that moved are listed, so the section is the same
-    with or without ``--all``.
+    cause. Only measurements that moved are listed, unless ``show_unchanged``
+    is set, in which case unchanged ones are included too.
 
     Args:
-        hidden: Each affected column with its changed metrics the table omits.
+        hidden: Each affected column with its metrics the table omits.
+        show_unchanged: Whether unchanged metrics may be present, which changes
+            the heading from "changes" to a plain listing.
 
     Returns:
         The renderables to append.
@@ -601,7 +605,8 @@ def _omitted_section(
                 _pair(metric),
                 _delta(metric),
             )
-    return [Text(), Text("Other column changes", style="bold"), grid]
+    title = "Other column metrics" if show_unchanged else "Other column changes"
+    return [Text(), Text(title, style="bold"), grid]
 
 
 def _column_table(
@@ -702,12 +707,13 @@ def _pair(metric: MetricDiff | None) -> Text:
     """
     if metric is None:
         return Text(_MISSING, style="dim")
+    new = metric.new_display or _value(metric.new)
     if metric.severity is Severity.UNCHANGED:
-        return Text(_value(metric.new), style="dim")
+        return Text(new, style="dim")
 
-    text = Text(_value(metric.old), style="dim")
+    text = Text(metric.old_display or _value(metric.old), style="dim")
     text.append(f" {_ARROW} ", style="dim")
-    text.append(_value(metric.new), style=_SEVERITY_STYLES[metric.severity])
+    text.append(new, style=_SEVERITY_STYLES[metric.severity])
     return text
 
 

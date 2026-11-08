@@ -19,6 +19,7 @@ its recorded statistics can support, and every score is reported alongside the
 scales are not comparable to each other.
 """
 
+import dataclasses
 import math
 from bisect import bisect_right
 from collections.abc import Mapping, Sequence
@@ -91,7 +92,14 @@ _STRING_METRICS: Final[tuple[str, ...]] = (
     "min_token_count",
     "max_token_count",
 )
-_DATETIME_METRICS: Final[tuple[str, ...]] = (*_NULL_METRICS, "min", "max", "range_days")
+# Compared as epoch seconds, where a relative tolerance would scale with the
+# distance from 1970 rather than with anything about the data.
+_DATETIME_BOUNDS: Final[tuple[str, ...]] = ("min", "max")
+_DATETIME_METRICS: Final[tuple[str, ...]] = (
+    *_NULL_METRICS,
+    *_DATETIME_BOUNDS,
+    "range_days",
+)
 
 # Smoothing for PSI. A bucket empty on one side makes the log term infinite, so
 # every bucket is credited half an observation before the counts are turned into
@@ -104,7 +112,7 @@ _DATETIME_METRICS: Final[tuple[str, ...]] = (*_NULL_METRICS, "min", "max", "rang
 _PSI_PRIOR: Final = 0.5
 
 # Slack for float rounding when checking that counts fit within the row count.
-_TOLERANCE: Final = 1e-9
+_TOLERANCE: Final = 1e-6
 _MIN_HISTOGRAM_EDGES: Final = 2
 # Below this a measured shift is floating-point noise, not movement. Two
 # identical histograms can score a few multiples of epsilon rather than a
@@ -403,7 +411,12 @@ def _diff_dataset_metrics(
 
 
 def _compare(
-    key: str, old: float | None, new: float | None, *, options: DiffOptions
+    key: str,
+    old: float | None,
+    new: float | None,
+    *,
+    options: DiffOptions,
+    datetime_bound: bool = False,
 ) -> MetricDiff | None:
     """Compare one scalar and classify how far it moved.
 
@@ -412,6 +425,9 @@ def _compare(
         old: The baseline value, or ``None`` if not recorded.
         new: The later value, or ``None`` if not recorded.
         options: The active thresholds.
+        datetime_bound: Whether the values are a datetime column's bound in
+            epoch seconds, which get no relative tolerance. The key alone
+            cannot say: numeric columns have a ``min`` and ``max`` too.
 
     Returns:
         The comparison, or ``None`` if neither side recorded the metric and
@@ -434,9 +450,8 @@ def _compare(
     delta = new - old
     pct_change = delta / abs(old) if old != 0 else None
 
-    if math.isclose(
-        old, new, rel_tol=options.rel_tolerance, abs_tol=options.abs_tolerance
-    ):
+    rel_tol = 0.0 if datetime_bound else options.rel_tolerance
+    if math.isclose(old, new, rel_tol=rel_tol, abs_tol=options.abs_tolerance):
         return MetricDiff(
             key=key,
             old=old,
@@ -625,14 +640,7 @@ def _diff_column(
     metrics = tuple(
         diff
         for key in keys
-        if (
-            diff := _compare(
-                key,
-                _stat(old, key),
-                _stat(new, key),
-                options=options,
-            )
-        )
+        if (diff := _compare_stat(key, old, new, kind=kind, options=options))
         is not None
     )
     shift = (
@@ -667,6 +675,46 @@ def _diff_column(
         metrics=metrics,
         distribution_shift=shift,
         severity=worst(severities),
+    )
+
+
+def _compare_stat(
+    key: str,
+    old: Mapping[str, Any] | None,
+    new: Mapping[str, Any] | None,
+    *,
+    kind: ColumnKind,
+    options: DiffOptions,
+) -> MetricDiff | None:
+    """Compare one statistic of a column.
+
+    Args:
+        key: The metric's stable name.
+        old: The column's baseline statistics, or ``None``.
+        new: The column's later statistics, or ``None``.
+        kind: The statistics variant being compared.
+        options: The active thresholds.
+
+    Returns:
+        The comparison, or ``None`` if neither side recorded the metric. A
+        datetime bound also carries each side's readable form, taken from the
+        recorded text: rebuilding it from epoch seconds would show a
+        timezone-less value in whichever zone the machine happens to be in.
+    """
+    datetime_bound = kind is ColumnKind.DATETIME and key in _DATETIME_BOUNDS
+    diff = _compare(
+        key,
+        _stat(old, key),
+        _stat(new, key),
+        options=options,
+        datetime_bound=datetime_bound,
+    )
+    if diff is None or not datetime_bound:
+        return diff
+    return dataclasses.replace(
+        diff,
+        old_display=_timestamp_display(old, key),
+        new_display=_timestamp_display(new, key),
     )
 
 
@@ -728,10 +776,43 @@ def _epoch_seconds(value: str) -> float | None:
         trailing ``Z`` is translated first, matching how the stats computer
         reads these values back.
     """
+    parsed = _parse_timestamp(value)
+    return parsed.timestamp() if parsed is not None else None
+
+
+def _parse_timestamp(value: str) -> datetime | None:
+    """Parse a recorded ISO-8601 timestamp.
+
+    Args:
+        value: The recorded text.
+
+    Returns:
+        The moment, or ``None`` if the text cannot be parsed.
+    """
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _timestamp_display(stats: Mapping[str, Any] | None, key: str) -> str | None:
+    """Return a datetime bound as a reader should see it.
+
+    Args:
+        stats: The column's statistics, or ``None``.
+        key: Which bound to read.
+
+    Returns:
+        The moment to the precision recorded, keeping its UTC offset and
+        writing UTC as ``Z``. ``None`` if the bound is absent or invalid,
+        where there is no moment to show.
+    """
+    value = stats.get(key) if stats is not None else None
+    parsed = _parse_timestamp(value) if isinstance(value, str) else None
+    if parsed is None:
+        return None
+    text = parsed.isoformat(sep=" ")
+    return f"{text.removesuffix('+00:00')}Z" if text.endswith("+00:00") else text
 
 
 # ---------------------------------------------------------------------------
@@ -1018,9 +1099,14 @@ def _string_shift(
     new_share, new_tail, new_note = _category_shares(new, new_values, rows=new_rows)
 
     keys = set(old_share) | set(new_share)
-    distance = 0.5 * (
-        sum(abs(new_share.get(key, 0.0) - old_share.get(key, 0.0)) for key in keys)
-        + abs(new_tail - old_tail)
+    # Inputs that pass validation can still total 1 + tolerance from rounding.
+    distance = min(
+        1.0,
+        0.5
+        * (
+            sum(abs(new_share.get(key, 0.0) - old_share.get(key, 0.0)) for key in keys)
+            + abs(new_tail - old_tail)
+        ),
     )
     return DistributionShift(
         method=ShiftMethod.TOP_VALUES_TVD,
@@ -1060,11 +1146,19 @@ def _count_problem(
     if coverage is not None and not 0.0 <= coverage <= 1.0:
         return f"{side} snapshot has coverage outside [0, 1]"
 
+    counted = sum(values.values())
+    disagreement = f"{side} snapshot coverage disagrees with its counts"
+    if coverage is not None and (counted > 0) != (coverage > 0):
+        return disagreement
+
     if rows is not None:
         null_fraction = _extract.number(stats.get("null_fraction")) or 0.0
         non_null = float(rows) * (1.0 - null_fraction)
-        if non_null > 0 and sum(values.values()) > non_null * (1 + _TOLERANCE):
-            return f"{side} snapshot counts exceed its non-null rows"
+        if non_null > 0:
+            if counted > non_null * (1 + _TOLERANCE):
+                return f"{side} snapshot counts exceed its non-null rows"
+            if coverage is not None and abs(coverage - counted / non_null) > _TOLERANCE:
+                return disagreement
     return None
 
 

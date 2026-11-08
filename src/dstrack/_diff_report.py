@@ -646,8 +646,13 @@ def _column_block(kit: _Kit, column: ColumnStatDiff) -> Any:
         rows.append(
             [
                 _p(kit, _label(metric.key), kit.cell),
-                _p(kit, _value(metric.old), kit.cell),
-                _p(kit, _value(metric.new), kit.cell, color=color),
+                _p(kit, metric.old_display or _value(metric.old), kit.cell),
+                _p(
+                    kit,
+                    metric.new_display or _value(metric.new),
+                    kit.cell,
+                    color=color,
+                ),
                 _p(kit, _delta(metric), kit.cell, color=color),
             ]
         )
