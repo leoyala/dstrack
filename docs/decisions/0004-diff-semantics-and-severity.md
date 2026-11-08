@@ -94,8 +94,8 @@ score is never read on the PSI scale.
 ### Distribution shift for text: total variation distance
 Text columns record only their top values, so the distance is computed over the union of
 both sides' top values **plus a synthetic bucket carrying the untracked tail**
-(`1 - top_values_coverage`). Without that bucket, a column whose top values held steady
-while everything beneath them churned would score zero.
+(`1 - top_values_coverage`). The bucket detects changes in aggregate tail mass, but not
+changes in tail composition when that mass and the top-value shares stay the same.
 
 ### No rename inference
 A renamed column is reported as one removal and one addition.

@@ -6,10 +6,10 @@ Takes two snapshot payloads -- the plain dicts
 changed between them: schema, dataset-level metrics, and per-column
 statistics, each classified by how much it should worry the reader.
 
-Neither input has to come from a store. Every field is read defensively and
-anything missing degrades to "not recorded", so a dict assembled by hand, or
-one written by a newer dstrack, is compared as far as it can be rather than
-refused.
+Neither input has to come from a store. Missing fields degrade to "not
+recorded", and a payload with no recorded format version is compared as far as
+its fields allow. An unsupported recorded format version raises
+`IncompatibleSnapshotError`.
 
 Layers
 ------

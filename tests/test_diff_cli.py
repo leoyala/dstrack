@@ -1,6 +1,7 @@
 """Tests for the `dstrack diff` command in src/dstrack/_diff.py."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -113,10 +114,21 @@ def test_two_snapshot_ids_compare_in_the_order_given(
 
 
 def test_short_prefixes_work_like_short_commit_hashes(
-    store_root: Path, tracked: Path
+    store_root: Path, tracked: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Nobody types a UUID in full so it should be allowed to pass the beginning of the UUID."""
     first, second = _snapshots(store_root, tracked)
+
+    # The output shows snapshot ages ("3 seconds ago"). Freeze the clock so a
+    # second boundary between the two invocations cannot make them differ.
+    frozen = datetime.now(UTC)
+
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen
+
+    monkeypatch.setattr("dstrack._diff.datetime", _FrozenDatetime)
 
     result_short_uid = _diff(first[:8], second[:8])
     result_long_uid = _diff(first, second)
@@ -223,6 +235,33 @@ def test_json_output_carries_no_decoration(store_root: Path, tracked: Path) -> N
 
     assert "\N{BOX DRAWINGS LIGHT VERTICAL}" not in result.output
     assert "\x1b[" not in result.output
+
+
+def test_json_without_an_index_is_rejected_unless_consent_is_given(
+    store_root: Path, tracked: Path
+) -> None:
+    """--json must not build the index silently, prompt, or print to stdout."""
+    cache.index_path(store_root).unlink()
+
+    result = runner.invoke(app, ["diff", str(tracked), "--json"])
+
+    assert result.exit_code == 1
+    assert result.stdout == ""
+    assert "--yes" in result.stderr
+    assert not cache.index_exists(store_root)
+
+
+@pytest.mark.parametrize("flag", ["--yes", "--rebuild"])
+def test_json_without_an_index_proceeds_with_consent(
+    store_root: Path, tracked: Path, flag: str
+) -> None:
+    """--yes or --rebuild is consent enough, and stdout stays pure JSON."""
+    cache.index_path(store_root).unlink()
+
+    result = runner.invoke(app, ["diff", str(tracked), "--json", flag])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["summary"]["row_delta"] == 6
 
 
 def test_sensitivity_changes_what_is_reported(store_root: Path, tracked: Path) -> None:

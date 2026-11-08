@@ -33,10 +33,10 @@ DVC and use `dstrack` alongside it.
 - **Rich snapshots** - schema hash, content fingerprint, and per-column statistics
 - **CSV out of the box** - pure standard-library reader, no heavy dependencies
 - **Lightweight CLI** - a small, git-like local store you can commit alongside your code
+- **Snapshot comparison** - a rich display of what has changed across dataset snapshots
 
-!!! note "On the roadmap"
-    Change detection and drift monitoring - comparing snapshots to surface schema and
-    distribution shifts - are planned. See the [roadmap](roadmap.md).
+!!! note "Many other features are planned"
+    Check the [roadmap](roadmap.md) to view new features that are planned.
 
 <figure markdown="span">
   ![CLI example](assets/cli.gif)

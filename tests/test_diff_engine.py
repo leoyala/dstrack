@@ -416,14 +416,50 @@ def test_a_new_dominant_category_shifts_a_text_column() -> None:
 def test_the_untracked_tail_is_carried_as_its_own_bucket() -> None:
     """Coverage falling means the tail grew, even if the top values held."""
     new = _mutate()
-    new["column_stats"]["city"]["top_values_coverage"] = 0.4
+    new["column_stats"]["city"]["top_values"] = {
+        "NY": 400,
+        "LA": 300,
+        "SF": 200,
+        **{f"category_{i}": 1 for i in range(47)},
+    }
+    new["column_stats"]["city"]["num_unique"] = 103
+    new["column_stats"]["city"]["top_values_coverage"] = 0.947
 
     result = diff_snapshots(_payload(), new)
 
     column = next(c for c in result.columns if c.name == "city")
     assert column.distribution_shift is not None
     assert column.distribution_shift.score is not None
-    assert column.distribution_shift.score > 0
+    assert column.distribution_shift.score == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize(
+    ("top_values", "coverage"),
+    [
+        ({"A": -1000, "B": 1100}, 1.0),
+        ({"A": 5000}, 1.0),
+        ({"A": 50}, 1.5),
+    ],
+    ids=["negative-count", "count-exceeds-rows", "coverage-out-of-range"],
+)
+def test_impossible_top_values_are_unmeasurable_not_scored(
+    top_values: dict[str, int], coverage: float
+) -> None:
+    """A score from counts that cannot exist would read as real drift."""
+    old = _mutate()
+    old["column_stats"]["city"]["top_values"] = top_values
+    old["column_stats"]["city"]["top_values_coverage"] = coverage
+    new = _mutate()
+    new["column_stats"]["city"]["top_values"] = {"B": 100}
+
+    result = diff_snapshots(old, new)
+
+    column = next(c for c in result.columns if c.name == "city")
+    assert column.distribution_shift is not None
+    assert column.distribution_shift.method is ShiftMethod.NONE
+    assert column.distribution_shift.score is None
+    assert column.distribution_shift.severity is Severity.UNCHANGED
+    assert column.distribution_shift.detail is not None
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +485,39 @@ def test_a_column_that_changed_kind_is_critical_and_barely_comparable() -> None:
     assert column.severity is Severity.CRITICAL
     assert {m.key for m in column.metrics} == {"null_fraction", "null_count"}
     assert column.distribution_shift is None
+
+
+def test_shifting_both_datetime_bounds_is_a_change_even_at_equal_duration() -> None:
+    """A window that slid forward is not the window that was recorded."""
+
+    def _window(start: str, end: str) -> dict[str, Any]:
+        payload = _mutate(
+            columns=[{"name": "ts", "dtype": "datetime64", "nullable": True}],
+            num_columns=1,
+        )
+        payload["column_stats"] = {
+            "ts": {
+                "null_count": 0,
+                "null_fraction": 0.0,
+                "min": start,
+                "max": end,
+                "range_days": 365.0,
+            }
+        }
+        return payload
+
+    result = diff_snapshots(
+        _window("2024-01-01T00:00:00Z", "2024-12-31T00:00:00Z"),
+        _window("2025-01-01T00:00:00Z", "2025-12-31T00:00:00Z"),
+    )
+
+    column = next(c for c in result.columns if c.name == "ts")
+    by_key = {m.key: m for m in column.metrics}
+    assert by_key["range_days"].severity is Severity.UNCHANGED
+    assert by_key["min"].severity is not Severity.UNCHANGED
+    assert by_key["max"].severity is not Severity.UNCHANGED
+    assert column.severity is not Severity.UNCHANGED
+    assert result.identical is False
 
 
 def test_the_recorded_keys_outrank_a_declared_dtype() -> None:
@@ -560,5 +629,6 @@ def test_to_dict_holds_no_enum_objects() -> None:
     document = result.to_dict()
 
     assert document["severity"] == "critical"
-    assert isinstance(document["severity"], str)
+    assert type(document["severity"]) is str
     assert document["columns"][0]["kind"] == "numeric"
+    assert type(document["columns"][0]["kind"]) is str

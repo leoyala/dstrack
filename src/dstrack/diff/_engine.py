@@ -20,6 +20,7 @@ scales are not comparable to each other.
 """
 
 import math
+from bisect import bisect_right
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
@@ -90,7 +91,7 @@ _STRING_METRICS: Final[tuple[str, ...]] = (
     "min_token_count",
     "max_token_count",
 )
-_DATETIME_METRICS: Final[tuple[str, ...]] = (*_NULL_METRICS, "range_days")
+_DATETIME_METRICS: Final[tuple[str, ...]] = (*_NULL_METRICS, "min", "max", "range_days")
 
 # Smoothing for PSI. A bucket empty on one side makes the log term infinite, so
 # every bucket is credited half an observation before the counts are turned into
@@ -101,9 +102,9 @@ _DATETIME_METRICS: Final[tuple[str, ...]] = (*_NULL_METRICS, "range_days")
 # observation is instead a large share of a tiny sample and a negligible one of
 # a large sample, which is exactly how confident the emptiness is.
 _PSI_PRIOR: Final = 0.5
-# The bucket standing for everything outside a string column's top values, so
-# that a shift confined to the untracked tail is still visible.
-_OTHER_BUCKET: Final = "\x00other"
+
+# Slack for float rounding when checking that counts fit within the row count.
+_TOLERANCE: Final = 1e-9
 _MIN_HISTOGRAM_EDGES: Final = 2
 # Below this a measured shift is floating-point noise, not movement. Two
 # identical histograms can score a few multiples of epsilon rather than a
@@ -430,13 +431,21 @@ def _compare(
             severity=Severity.INFO,
         )
 
+    delta = new - old
+    pct_change = delta / abs(old) if old != 0 else None
+
     if math.isclose(
         old, new, rel_tol=options.rel_tolerance, abs_tol=options.abs_tolerance
     ):
-        return MetricDiff(key, old, new, 0.0, 0.0, Severity.UNCHANGED)
+        return MetricDiff(
+            key=key,
+            old=old,
+            new=new,
+            delta=delta,
+            pct_change=pct_change,
+            severity=Severity.UNCHANGED,
+        )
 
-    delta = new - old
-    pct_change = delta / abs(old) if old != 0 else None
     return MetricDiff(
         key=key,
         old=old,
@@ -909,13 +918,19 @@ def _redistribute(
     for index, count in enumerate(counts):
         low, high = edges[index], edges[index + 1]
         span = high - low
+        if span <= 0:
+            # A zero-width source bin cannot be subdivided, and it overlaps
+            # nothing by width, so the overlap rule below would drop its count.
+            # Its whole count belongs to the target bin containing its edge:
+            # lower-inclusive, except that the grid's final edge belongs to the
+            # last bin.
+            target = min(bisect_right(union, low) - 1, len(spread) - 1)
+            spread[max(target, 0)] += count
+            continue
         for target in range(len(spread)):
             overlap = min(high, union[target + 1]) - max(low, union[target])
-            if overlap <= 0:
-                continue
-            # A zero-width source bin cannot be subdivided; its whole count
-            # belongs to whichever target bin contains it.
-            spread[target] += count * (overlap / span) if span > 0 else count
+            if overlap > 0:
+                spread[target] += count * (overlap / span)
 
     return spread
 
@@ -948,6 +963,8 @@ def _percentile_shift(old: Any, new: Any) -> float | None:
     p5 = _extract.number(old.get("p5"))
     p95 = _extract.number(old.get("p95"))
     p50 = _extract.number(old.get("p50"))
+    if p5 is not None and p95 is not None and p95 < p5:
+        return None
     spread = (p95 - p5) if p5 is not None and p95 is not None else 0.0
     scale = spread or abs(p50 or 0.0) or 1.0
     return max(moves) / scale
@@ -987,12 +1004,23 @@ def _string_shift(
             detail="no top values recorded",
         )
 
-    old_share, old_note = _category_shares(old, old_values, rows=old_rows)
-    new_share, new_note = _category_shares(new, new_values, rows=new_rows)
+    problem = _count_problem(old, old_values, rows=old_rows, side="baseline")
+    problem = problem or _count_problem(new, new_values, rows=new_rows, side="later")
+    if problem:
+        return DistributionShift(
+            method=ShiftMethod.NONE,
+            score=None,
+            severity=Severity.UNCHANGED,
+            detail=f"top values unusable: {problem}",
+        )
+
+    old_share, old_tail, old_note = _category_shares(old, old_values, rows=old_rows)
+    new_share, new_tail, new_note = _category_shares(new, new_values, rows=new_rows)
 
     keys = set(old_share) | set(new_share)
-    distance = 0.5 * sum(
-        abs(new_share.get(key, 0.0) - old_share.get(key, 0.0)) for key in keys
+    distance = 0.5 * (
+        sum(abs(new_share.get(key, 0.0) - old_share.get(key, 0.0)) for key in keys)
+        + abs(new_tail - old_tail)
     )
     return DistributionShift(
         method=ShiftMethod.TOP_VALUES_TVD,
@@ -1004,9 +1032,45 @@ def _string_shift(
     )
 
 
+def _count_problem(
+    stats: Mapping[str, Any],
+    values: Mapping[str, float],
+    *,
+    rows: int | None,
+    side: str,
+) -> str | None:
+    """Say why recorded top values cannot form a distribution, if they cannot.
+
+    Total variation distance is only bounded by 1 for genuine distributions.
+    Scoring impossible counts would report a confident, meaningless drift.
+
+    Args:
+        stats: The column's statistics, for its null fraction and coverage.
+        values: Its ``top_values`` counts.
+        rows: The snapshot's row count, or ``None`` if not recorded.
+        side: Which snapshot this is, for the message.
+
+    Returns:
+        A short reason, or ``None`` when the counts are usable.
+    """
+    if any(count < 0 for count in values.values()):
+        return f"{side} snapshot has a negative count"
+
+    coverage = _extract.number(stats.get("top_values_coverage"))
+    if coverage is not None and not 0.0 <= coverage <= 1.0:
+        return f"{side} snapshot has coverage outside [0, 1]"
+
+    if rows is not None:
+        null_fraction = _extract.number(stats.get("null_fraction")) or 0.0
+        non_null = float(rows) * (1.0 - null_fraction)
+        if non_null > 0 and sum(values.values()) > non_null * (1 + _TOLERANCE):
+            return f"{side} snapshot counts exceed its non-null rows"
+    return None
+
+
 def _category_shares(
     stats: Mapping[str, Any], values: Mapping[str, float], *, rows: int | None
-) -> tuple[dict[str, float], str | None]:
+) -> tuple[dict[str, float], float, str | None]:
     """Turn recorded category counts into shares of the column's values.
 
     Args:
@@ -1015,9 +1079,10 @@ def _category_shares(
         rows: The snapshot's row count, or ``None`` if not recorded.
 
     Returns:
-        The shares -- including the bucket standing for everything outside the
-        top values -- and a note when the normalization had to be weakened
-        because the row count was missing.
+        The shares of the top values, the share of everything outside them (kept
+        apart so no category name can collide with it, and so a shift confined
+        to the untracked tail stays visible), and a note when the normalization
+        had to be weakened because the row count was missing.
     """
     counted = sum(values.values())
     null_fraction = _extract.number(stats.get("null_fraction")) or 0.0
@@ -1026,7 +1091,8 @@ def _category_shares(
     note: str | None = None
     non_null = float(rows) * (1.0 - null_fraction) if rows is not None else 0.0
     if non_null <= 0:
-        non_null = counted
+        # Top values hold only ``coverage`` of the mass, so the total stays at one.
+        non_null = counted / coverage if coverage and coverage > 0 else counted
         note = "row count unavailable; shares normalized over the top values only"
 
     shares = (
@@ -1035,8 +1101,7 @@ def _category_shares(
     covered = (
         coverage if coverage is not None else (counted / non_null if non_null else 1.0)
     )
-    shares[_OTHER_BUCKET] = max(0.0, 1.0 - covered)
-    return shares, note
+    return shares, max(0.0, 1.0 - covered), note
 
 
 # ---------------------------------------------------------------------------

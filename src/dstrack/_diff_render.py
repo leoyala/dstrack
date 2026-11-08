@@ -39,6 +39,7 @@ from dstrack.diff import (
     ColumnStatDiff,
     DistributionShift,
     MetricDiff,
+    SetChange,
     Severity,
     ShiftMethod,
     SnapshotDiff,
@@ -148,10 +149,13 @@ def render_diff(
 
     sections: list[RenderableType] = [_identity(diff, now=now)]
 
-    if diff.identical:
-        sections.append(
-            Text("The two snapshots are identical in everything compared.", "green")
-        )
+    identical_note = Text(
+        "The two snapshots are identical in everything compared.", "green"
+    )
+    # Identical snapshots keep the concise output unless there is something
+    # extra to say: a recorded column reorder, or details asked for by --all.
+    if diff.identical and not diff.schema.reordered and not show_unchanged:
+        sections.append(identical_note)
         return Group(*sections)
 
     sections.append(_schema_section(diff))
@@ -160,8 +164,9 @@ def render_diff(
     if metrics is not None:
         sections.extend([Text(), Text("Dataset", style="bold"), metrics])
 
+    sections.extend(_set_sections(diff.sets))
     sections.extend(_column_sections(diff, width=width, show_unchanged=show_unchanged))
-    sections.extend([Text(), _summary(diff)])
+    sections.extend([Text(), identical_note if diff.identical else _summary(diff)])
     return Group(*sections)
 
 
@@ -457,6 +462,51 @@ def _delta_style(metric: MetricDiff) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Sets
+# ---------------------------------------------------------------------------
+
+
+def _set_sections(sets: Sequence[SetChange]) -> list[RenderableType]:
+    """Render changes to set-valued dataset fields.
+
+    Args:
+        sets: The changed sets, e.g. ``constant_columns``.
+
+    Returns:
+        The renderables to append, empty if no set changed. Each set gets its
+        name and the columns that joined (``+``) or left (``-``) it.
+    """
+    if not sets:
+        return []
+
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(no_wrap=True)
+    grid.add_column(style="dim", no_wrap=True)
+    grid.add_column()
+
+    for change in sets:
+        members = Text()
+        listed = [("+", "green", change.added), ("-", "red", change.removed)]
+        for sign, style, names in listed:
+            for name in names[:_MAX_LISTED_COLUMNS]:
+                if members:
+                    members.append(" ")
+                members.append(f"{sign}{name}", style=style)
+            if len(names) > _MAX_LISTED_COLUMNS:
+                hidden = len(names) - _MAX_LISTED_COLUMNS
+                members.append(f" {sign}{hidden} more", style="dim")
+        grid.add_row(
+            Text(
+                _SEVERITY_GLYPHS[change.severity],
+                style=_SEVERITY_STYLES[change.severity],
+            ),
+            _label(change.key),
+            members,
+        )
+    return [Text(), Text("Column sets", style="bold"), grid]
+
+
+# ---------------------------------------------------------------------------
 # Columns
 # ---------------------------------------------------------------------------
 
@@ -487,9 +537,10 @@ def _column_sections(
 
     sections: list[RenderableType] = [Text(), Text("Columns", style="bold")]
     if width < _SIDE_BY_SIDE_MIN_WIDTH:
-        sections.append(_stacked(shown))
+        sections.append(_stacked(shown, show_unchanged=show_unchanged))
         return sections
 
+    hidden: list[tuple[ColumnStatDiff, list[MetricDiff]]] = []
     for kind in _KIND_TITLES:
         group = [column for column in shown if column.kind is kind]
         if group:
@@ -499,7 +550,58 @@ def _column_sections(
                     _column_table(group, kind=kind, width=width),
                 ]
             )
+            shown_keys = {key for key, _ in _fields_for(kind, width=width)}
+            for column in group:
+                omitted = [
+                    metric
+                    for metric in column.metrics
+                    if metric.severity is not Severity.UNCHANGED
+                    and metric.key not in shown_keys
+                ]
+                if omitted:
+                    hidden.append((column, omitted))
+
+    if hidden:
+        sections.extend(_omitted_section(hidden))
     return sections
+
+
+def _omitted_section(
+    hidden: Sequence[tuple[ColumnStatDiff, Sequence[MetricDiff]]],
+) -> list[RenderableType]:
+    """Render changed measurements that the column tables have no cell for.
+
+    A column can be flagged because of a measurement the table does not carry
+    (a high percentile, a token count). Without this the flag has no visible
+    cause. Only measurements that moved are listed, so the section is the same
+    with or without ``--all``.
+
+    Args:
+        hidden: Each affected column with its changed metrics the table omits.
+
+    Returns:
+        The renderables to append.
+    """
+    grid = Table.grid(padding=(0, 2))
+    grid.add_column(no_wrap=True)
+    grid.add_column(no_wrap=True)
+    grid.add_column(style="dim", no_wrap=True)
+    grid.add_column(justify="right")
+    grid.add_column(justify="right")
+
+    for column, metrics in hidden:
+        for metric in metrics:
+            grid.add_row(
+                Text(
+                    _SEVERITY_GLYPHS[metric.severity],
+                    style=_SEVERITY_STYLES[metric.severity],
+                ),
+                Text(column.name, style="bold"),
+                Text(metric.key),
+                _pair(metric),
+                _delta(metric),
+            )
+    return [Text(), Text("Other column changes", style="bold"), grid]
 
 
 def _column_table(
@@ -639,7 +741,9 @@ def _shift(shift: DistributionShift | None) -> Text:
     return text
 
 
-def _stacked(columns: Sequence[ColumnStatDiff]) -> RenderableType:
+def _stacked(
+    columns: Sequence[ColumnStatDiff], *, show_unchanged: bool = False
+) -> RenderableType:
     """Render each column as its own small card, for a narrow terminal.
 
     A side-by-side table squeezed into forty cells stops being one, so below
@@ -648,6 +752,7 @@ def _stacked(columns: Sequence[ColumnStatDiff]) -> RenderableType:
 
     Args:
         columns: The columns to show.
+        show_unchanged: Include measurements that did not move.
 
     Returns:
         The stacked cards.
@@ -669,7 +774,7 @@ def _stacked(columns: Sequence[ColumnStatDiff]) -> RenderableType:
             Text(column.kind.value, style="dim"),
         )
         for metric in column.metrics:
-            if metric.severity is Severity.UNCHANGED:
+            if metric.severity is Severity.UNCHANGED and not show_unchanged:
                 continue
             grid.add_row("", _label(metric.key), _pair(metric))
         if column.distribution_shift is not None and (
@@ -706,6 +811,12 @@ def _summary(diff: SnapshotDiff) -> Text:
         parts.append((f"{summary.columns_type_changed} columns retyped", "yellow"))
     if summary.columns_drifted:
         parts.append((f"{summary.columns_drifted} columns drifted", "yellow"))
+    for change in diff.sets:
+        name = change.key.replace("_", " ")
+        if change.added:
+            parts.append((f"+{len(change.added)} {name}", "yellow"))
+        if change.removed:
+            parts.append((f"-{len(change.removed)} {name}", "dim"))
 
     if not parts:
         return Text("No column changed materially.", style="dim")

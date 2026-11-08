@@ -43,7 +43,7 @@ INDEX_FILENAME: Final = "index.db"
 
 # Bump whenever the schema below changes: a mismatch rebuilds the index rather
 # than querying it with the wrong shape.
-_SCHEMA_VERSION: Final = "1"
+_SCHEMA_VERSION: Final = "2"
 
 # Escape character for SQL ``LIKE`` patterns built from user-supplied text.
 _LIKE_ESCAPE: Final = "\\"
@@ -74,6 +74,18 @@ CREATE TABLE snapshots (
 );
 
 CREATE INDEX idx_snapshots_dataset ON snapshots(dataset_id);
+
+-- Snapshots reachable from a dataset's HEAD. UNION, not UNION ALL, so that a
+-- looped lineage still terminates.
+CREATE VIEW committed_snapshots AS
+WITH RECURSIVE reachable(snapshot_id) AS (
+    SELECT head_snapshot_id FROM datasets WHERE head_snapshot_id IS NOT NULL
+    UNION
+    SELECT s.parent_snapshot_id FROM snapshots s
+    JOIN reachable r ON s.snapshot_id = r.snapshot_id
+    WHERE s.parent_snapshot_id IS NOT NULL
+)
+SELECT s.* FROM snapshots s JOIN reachable r ON r.snapshot_id = s.snapshot_id;
 """
 
 _SNAPSHOT_COLUMNS: Final = (
@@ -228,7 +240,11 @@ def find_dataset_by_path(dataset_path: str, *, store_root: Path) -> str | None:
 def find_snapshots_by_prefix(
     prefix: str, *, store_root: Path, limit: int = 10
 ) -> list[SnapshotLocation]:
-    """Return the snapshots whose id starts with `prefix`, sorted by id.
+    """Return the committed snapshots whose id starts with `prefix`, sorted by id.
+
+    Only snapshots reachable from a dataset's indexed ``HEAD`` are considered,
+    so a log line that ``HEAD`` does not reach can neither be returned nor make
+    a prefix ambiguous.
 
     Snapshot ids are UUID4s, which nobody types in full, so a user names one by
     its leading characters the way git takes a short commit hash. The lookup
@@ -251,7 +267,7 @@ def find_snapshots_by_prefix(
     """
     with _connect(store_root) as conn:
         rows = conn.execute(
-            "SELECT dataset_id, snapshot_id FROM snapshots "
+            "SELECT dataset_id, snapshot_id FROM committed_snapshots "
             f"WHERE snapshot_id LIKE ? ESCAPE '{_LIKE_ESCAPE}' "
             "ORDER BY snapshot_id LIMIT ?",
             (f"{_escape_like(prefix)}%", limit),

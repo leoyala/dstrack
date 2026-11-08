@@ -22,7 +22,7 @@ escapes unconditionally.
 
 import io
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 from xml.sax.saxutils import escape
@@ -156,6 +156,8 @@ class _Kit:
         subheading: Style for headings within a section.
         body: Style for running text.
         cell: Style for text inside table cells.
+        header: Style for table header cells; white, because a paragraph's own
+            text color overrides the table's ``TEXTCOLOR``.
         mono: Style for code-like values inside table cells.
         note: Style for muted explanatory text.
     """
@@ -233,6 +235,9 @@ class _Kit:
         )
         self.cell = ParagraphStyle(
             "dsCell", parent=self.body, fontSize=8.2, leading=10.5
+        )
+        self.header = ParagraphStyle(
+            "dsHeader", parent=self.cell, textColor=colors.HexColor(_PAPER)
         )
         self.mono = ParagraphStyle(
             "dsMono", parent=self.cell, fontName="Courier", fontSize=7.8
@@ -348,13 +353,7 @@ def _identity(kit: _Kit, diff: SnapshotDiff) -> list[Any]:
     Returns:
         The section's flowables.
     """
-    rows: list[list[Any]] = [
-        [
-            _p(kit, "Field", kit.cell, bold=True),
-            _p(kit, "Before", kit.cell, bold=True),
-            _p(kit, "After", kit.cell, bold=True),
-        ]
-    ]
+    rows: list[list[Any]] = [_header_row(kit, "Field", "Before", "After")]
     rows.append(
         [
             _p(kit, "Snapshot", kit.cell),
@@ -510,14 +509,7 @@ def _schema(kit: _Kit, diff: SnapshotDiff) -> list[Any]:
             )
         return section
 
-    rows: list[list[Any]] = [
-        [
-            _p(kit, "Change", kit.cell, bold=True),
-            _p(kit, "Column", kit.cell, bold=True),
-            _p(kit, "Before", kit.cell, bold=True),
-            _p(kit, "After", kit.cell, bold=True),
-        ]
-    ]
+    rows: list[list[Any]] = [_header_row(kit, "Change", "Column", "Before", "After")]
     tints: list[tuple[int, str]] = []
     for attribute, label, color in _CHANGE_LABELS:
         for change in getattr(schema, attribute):
@@ -551,13 +543,7 @@ def _metrics(kit: _Kit, diff: SnapshotDiff) -> list[Any]:
         return []
 
     rows: list[list[Any]] = [
-        [
-            _p(kit, "Metric", kit.cell, bold=True),
-            _p(kit, "Before", kit.cell, bold=True),
-            _p(kit, "After", kit.cell, bold=True),
-            _p(kit, "Change", kit.cell, bold=True),
-            _p(kit, "Relative", kit.cell, bold=True),
-        ]
+        _header_row(kit, "Metric", "Before", "After", "Change", "Relative")
     ]
     for metric in diff.metrics:
         color = _SEVERITY_COLORS[metric.severity]
@@ -652,14 +638,7 @@ def _column_block(kit: _Kit, column: ColumnStatDiff) -> Any:
         color=_SEVERITY_COLORS[column.severity],
     )
 
-    rows: list[list[Any]] = [
-        [
-            _p(kit, "Statistic", kit.cell, bold=True),
-            _p(kit, "Before", kit.cell, bold=True),
-            _p(kit, "After", kit.cell, bold=True),
-            _p(kit, "Change", kit.cell, bold=True),
-        ]
-    ]
+    rows: list[list[Any]] = [_header_row(kit, "Statistic", "Before", "After", "Change")]
     for metric in column.metrics:
         if metric.severity is Severity.UNCHANGED:
             continue
@@ -676,7 +655,7 @@ def _column_block(kit: _Kit, column: ColumnStatDiff) -> Any:
     block: list[Any] = [heading]
     if len(rows) > 1:
         block.append(_table(kit, rows, widths=[46 * kit.mm, None, None, None]))
-    else:
+    elif column.present_in_old != column.present_in_new:
         block.append(_p(kit, "Only the column's presence changed.", kit.note))
 
     # The shift is a property of the pair, not a value either side recorded, so
@@ -716,7 +695,10 @@ def _numbered_canvas(kit: _Kit, *, now: datetime) -> Any:
     Returns:
         A canvas class for `doc.build` to instantiate.
     """
-    stamp = now.strftime("%Y-%m-%d %H:%M UTC")
+    # The footer says UTC, so an aware moment is converted to it; a naive one
+    # is taken to be UTC already and left as it is.
+    moment = now.astimezone(UTC) if now.tzinfo is not None else now
+    stamp = moment.strftime("%Y-%m-%d %H:%M UTC")
 
     class _NumberedCanvas(kit.canvas.Canvas):  # type: ignore[misc,name-defined]
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -792,6 +774,23 @@ def _p(
     if color is not None:
         markup = f'<font color="{color}">{markup}</font>'
     return kit.Paragraph(markup, style)
+
+
+def _header_row(kit: _Kit, *labels: str) -> list[Any]:
+    """Build a table's header row.
+
+    The text is white on the paragraph itself. A table's ``TEXTCOLOR`` command
+    does not reach text owned by a `Paragraph`, which would otherwise render in
+    the body ink color on the dark header fill.
+
+    Args:
+        kit: The loaded reportlab names.
+        *labels: The column titles.
+
+    Returns:
+        One bold, white paragraph per title.
+    """
+    return [_p(kit, label, kit.header, bold=True) for label in labels]
 
 
 def _table(kit: _Kit, rows: Sequence[Sequence[Any]], *, widths: Sequence[Any]) -> Any:

@@ -132,8 +132,9 @@ def diff(
         raise typer.Exit(code=1) from e
 
     # Under --json the only thing on stdout may be the document itself, so the
-    # index cannot be offered interactively: consent has to come up front.
-    ensure_index(store_root, yes=yes or as_json, rebuild=rebuild, quiet=as_json)
+    # index cannot be offered interactively: without one, --yes or --rebuild
+    # must be given, or the request is rejected.
+    ensure_index(store_root, yes=yes, rebuild=rebuild, quiet=as_json)
 
     try:
         # Sync before resolving: the index does not travel with the repository,

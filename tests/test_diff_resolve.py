@@ -234,6 +234,35 @@ def test_a_short_prefix_resolves_like_a_short_commit_hash(
     assert resolved.snapshot_id == snapshot_id
 
 
+def _no_relative_path(*_args: object, **_kwargs: object) -> str:
+    """Fail the way `os.path.relpath` does across Windows drives."""
+    raise ValueError("path is on mount 'D:', start on mount 'C:'")
+
+
+def test_a_prefix_resolves_when_no_relative_path_exists(
+    tmp_path: Path, store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A path root on another drive must not break short ids."""
+    csv = _write_csv(tmp_path / "data.csv")
+    dataset_id = _track(store_root, csv)
+    snapshot_id = _head(store_root, dataset_id)
+    monkeypatch.setattr("dstrack._resolve.recorded_path", _no_relative_path)
+
+    resolved = _resolve(snapshot_id[:8], store_root)
+
+    assert resolved.snapshot_id == snapshot_id
+
+
+def test_a_path_conversion_error_surfaces_when_no_prefix_matches(
+    store_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With neither reading available, the drive mismatch is the real failure."""
+    monkeypatch.setattr("dstrack._resolve.recorded_path", _no_relative_path)
+
+    with pytest.raises(ValueError, match="mount"):
+        _resolve("not-a-snapshot.csv", store_root)
+
+
 def test_an_ambiguous_prefix_lists_what_it_matched(
     tmp_path: Path, store_root: Path
 ) -> None:

@@ -82,7 +82,9 @@ def ensure_index(
 
     Raises:
         typer.Exit: Code 0 if the user declines to build it; code 1 if there
-            is no index and no terminal to ask at.
+            is no index and no terminal to ask at, or if `quiet` is set
+            without `yes`, since a quiet run cannot ask (the reason goes to
+            standard error).
     """
     path = cache.index_path(store_root)
     if rebuild:
@@ -92,6 +94,16 @@ def ensure_index(
         return
     if cache.index_exists(store_root):
         return
+
+    if not yes and quiet:
+        # Standard output is reserved for a document, so there is nowhere to
+        # ask and nowhere to report progress: consent must come from a flag.
+        typer.echo(
+            f"No snapshot index at `{path}`. Re-run with `--yes` to build it, "
+            "or `--rebuild`.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
     if not yes:
         if not sys.stdin.isatty():
@@ -301,7 +313,8 @@ def resolve_snapshot_ref(
         DatasetNotFoundError: If `spec` names nothing in the store.
         SnapshotNotFoundError: If it names a dataset that has no snapshots.
         StoreCorruptionError: If the payload cannot be read back.
-        ValueError: If `spec` and the path root are on different drives.
+        ValueError: If `spec` and the path root are on different drives and
+            `spec` is not the start of a snapshot id either.
     """
     canonical = canonical_uuid(spec)
     if canonical is not None:
@@ -311,15 +324,23 @@ def resolve_snapshot_ref(
         if store.dataset_exists(canonical, store_root=store_root):
             return _head_of(canonical, spec, store_root=store_root)
 
-    dataset_path = recorded_path(spec, store_root=store_root, root=root)
+    try:
+        dataset_path = recorded_path(spec, store_root=store_root, root=root)
+    except ValueError:
+        # With no relative path there is nothing to match against the store,
+        # but that says nothing about whether `spec` is a short snapshot id.
+        by_prefix = _resolve_prefix(spec, store_root=store_root)
+        if by_prefix is None:
+            raise
+        return by_prefix
+
     matched = cache.find_dataset_by_path(dataset_path, store_root=store_root)
     if matched is not None:
         return _head_of(matched, spec, store_root=store_root)
 
-    if canonical is None and _looks_like_prefix(spec):
-        located = _match_prefix(spec, spec, store_root=store_root)
-        if located is not None:
-            return _load(located, spec, store_root=store_root)
+    by_prefix = _resolve_prefix(spec, store_root=store_root)
+    if by_prefix is not None:
+        return by_prefix
 
     raise dataset_not_found(
         spec,
@@ -480,6 +501,33 @@ def _load(
     )
 
 
+def _resolve_prefix(spec: str, *, store_root: Path) -> ResolvedSnapshot | None:
+    """Resolve `spec` as the leading characters of a snapshot id.
+
+    A full UUID is refused here: it has already been looked up as an exact id,
+    and is not a prefix of anything else.
+
+    Args:
+        spec: The reference, as the user typed it.
+        store_root: Path to the ``.dstrack/`` directory.
+
+    Returns:
+        The snapshot it names, or ``None`` if it is not a prefix or matches
+        nothing.
+
+    Raises:
+        AmbiguousSnapshotError: If it matches more than one snapshot.
+        SnapshotNotFoundError: If the payload is not on disk.
+        StoreCorruptionError: If the payload cannot be read back.
+    """
+    if canonical_uuid(spec) is not None or not _looks_like_prefix(spec):
+        return None
+    located = _match_prefix(spec, spec, store_root=store_root)
+    if located is None:
+        return None
+    return _load(located, spec, store_root=store_root)
+
+
 def _looks_like_prefix(spec: str) -> bool:
     """Return whether `spec` could be the leading characters of a snapshot id.
 
@@ -549,7 +597,6 @@ def _candidates(matches: Sequence[store.SnapshotLocation], *, store_root: Path) 
         name = payload.get("dataset_name") or "-"
         created = payload.get("created_at") or "-"
         lines.append(
-            f"  {match.snapshot_id[:_SHORT_ID_LEN]}  {name}  {created}  "
-            f"dataset {match.dataset_id}"
+            f"  {match.snapshot_id}  {name}  {created}  dataset {match.dataset_id}"
         )
     return "\n".join(lines)

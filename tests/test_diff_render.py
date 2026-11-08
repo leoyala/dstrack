@@ -158,7 +158,7 @@ def test_names_that_look_like_markup_are_printed_verbatim() -> None:
 
 def test_a_category_that_looks_like_markup_is_printed_verbatim() -> None:
     """Categories come straight from the data and are the least trusted of all."""
-    new = _payload(snapshot_id="22222222-2222-4222-8222-222222222222")
+    new = _payload(snapshot_id="22222222-2222-4222-8222-222222222222", num_rows=1500)
     new["column_stats"]["city"]["top_values"] = {"[bold]NY": 900, "LA": 600}
 
     output = _render(diff_snapshots(_payload(), new))
@@ -179,14 +179,47 @@ def test_an_unchanged_comparison_says_so_and_shows_no_tables() -> None:
     assert "Schema" not in output
 
 
-def test_show_unchanged_includes_a_column_that_did_not_move() -> None:
-    """`--all` is for reading the whole picture, not only what changed."""
-    diff = _changed_diff()
+def test_an_identical_comparison_keeps_reorder_notes_and_all_details() -> None:
+    """The identical shortcut must not swallow a reorder or what `--all` asks for."""
+    new = _payload()
+    new["columns"].reverse()
+    diff = diff_snapshots(_payload(), new)
+    assert diff.identical
+    assert diff.schema.reordered
 
     default = _render(diff)
     everything = _render(diff, show_unchanged=True)
 
-    assert len(everything.splitlines()) > len(default.splitlines())
+    assert "reordered" in default
+    assert "identical" in default
+    assert "Columns" not in default
+    assert "reordered" in everything
+    assert "identical" in everything
+    assert "Columns" in everything
+
+
+def test_show_unchanged_includes_a_column_that_did_not_move() -> None:
+    """`--all` is for reading the whole picture, not only what changed."""
+    old = _payload()
+    new = _payload(snapshot_id="22222222-2222-4222-8222-222222222222", num_rows=1500)
+    new["column_stats"]["price"]["mean"] = 40.0
+    for payload in (old, new):
+        payload["columns"].append(
+            {"name": "stable", "dtype": "float64", "nullable": True}
+        )
+        payload["column_stats"]["stable"] = {
+            **payload["column_stats"]["price"],
+            "mean": 123.5,
+        }
+    diff = diff_snapshots(old, new)
+
+    default = _render(diff)
+    everything = _render(diff, show_unchanged=True)
+
+    assert "stable" not in default
+    assert "stable" in everything
+    assert "123.5" not in default
+    assert "123.5" in everything
 
 
 def test_oneline_is_a_single_line() -> None:

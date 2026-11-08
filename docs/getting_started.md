@@ -172,7 +172,8 @@ dstrack diff data.csv
 
 The output puts the two snapshots side by side and colors each difference by how much it
 should worry you: the schema changes first, then the dataset's own numbers, then every
-column whose statistics moved, with a distribution-shift score for each.
+column whose statistics moved, with a distribution-shift score when available.
+For a new column, the shift is shown as `—` because there is no baseline distribution.
 
 Any of these name a side, so you can compare whichever two you mean:
 

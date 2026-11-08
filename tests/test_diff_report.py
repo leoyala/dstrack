@@ -169,6 +169,43 @@ def test_a_cross_dataset_comparison_is_reported(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Column detail
+# ---------------------------------------------------------------------------
+
+
+def test_a_shift_without_scalar_changes_is_not_called_a_presence_change(
+    tmp_path: Path,
+) -> None:
+    """Histogram counts can move while every tabulated scalar stays put."""
+    path = tmp_path / "shift.pdf"
+    old, new = _payload(columns=1), _payload(columns=1)
+    new["column_stats"]["col0"]["histogram"]["counts"] = [400, 100, 100, 400]
+
+    write_pdf_report(diff_snapshots(old, new), path, now=NOW)
+
+    text = _text(path.read_bytes())
+    assert "PSI: " in text
+    assert "presence changed" not in text
+
+
+def test_a_kind_change_is_not_called_a_presence_change(tmp_path: Path) -> None:
+    """A column on both sides did not appear or vanish, whatever it now holds."""
+    path = tmp_path / "kind.pdf"
+    old, new = _payload(columns=1), _payload(columns=1)
+    new["column_stats"]["col0"] = {
+        "null_count": 0,
+        "null_fraction": 0.0,
+        "num_unique": 2,
+        "top_values": {"a": 600, "b": 400},
+        "top_values_coverage": 1.0,
+    }
+
+    write_pdf_report(diff_snapshots(old, new), path, now=NOW)
+
+    assert "presence changed" not in _text(path.read_bytes())
+
+
+# ---------------------------------------------------------------------------
 # Escaping
 # ---------------------------------------------------------------------------
 

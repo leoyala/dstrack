@@ -37,7 +37,10 @@ SeedOption = Annotated[
 
 def _path(file: str) -> Path:
     DATA_DIR.mkdir(exist_ok=True)
-    return DATA_DIR / file
+    path = DATA_DIR / file
+    if not path.resolve().is_relative_to(DATA_DIR.resolve()):
+        raise typer.BadParameter(f"{file!r} resolves outside {DATA_DIR}/.")
+    return path
 
 
 def _row(rng: random.Random, row_id: int) -> dict[str, str]:
@@ -131,6 +134,18 @@ def modify(
             if rng.random() < 0.3:
                 row["plan"] = "enterprise"
         changes.append("moved ~30% of rows to the enterprise plan")
+
+    # Make a column constant and another mostly null, so each joins a set
+    # (constant_columns / high_null_columns) in the diff.
+    if "is_active" in fields:
+        for row in data:
+            row["is_active"] = "true"
+        changes.append("made is_active constant (all true)")
+    if "signup_date" in fields:
+        blanked = rng.sample(range(len(data)), k=len(data) * 3 // 4)
+        for i in blanked:
+            data[i]["signup_date"] = ""
+        changes.append(f"nulled {len(blanked)} signup dates (>50% null)")
 
     # Schema: add a country column the first time, drop it the next.
     if schema:
