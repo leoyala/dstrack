@@ -3,7 +3,11 @@ coverage:
     project:
       default:
         target: 95%
-        threshold: 0.5%
+        threshold: 0%
+    patch:
+      default:
+        target: 95%
+        threshold: 0%
 comment:
   layout: "diff, flags, files"
   behavior: default
