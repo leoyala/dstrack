@@ -31,11 +31,12 @@ Foundation for all future capabilities: reading a dataset and capturing an immut
 
 Compare two snapshots and surface what changed between them.
 
-- [ ] Schema diff (added, removed, and type-changed columns)
-- [ ] Statistics diff (value range and distribution shifts)
-- [ ] Basic drift indicators
-- [ ] `dstrack diff` command
-- [ ] Structured JSON output for machine consumption
+- [x] Schema diff (added, removed, and type-changed columns)
+- [x] Statistics diff (value range and distribution shifts)
+- [x] Basic drift indicators
+- [x] `dstrack diff` command
+- [x] Structured JSON output for machine consumption
+- [x] PDF comparison report (optional `report` extra)
 
 ## v0.3 - CLI Polish
 

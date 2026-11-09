@@ -28,6 +28,11 @@ dependencies = [
     "typer>=0.26.8",
 ]
 
+[project.optional-dependencies]
+# PDF reporting only. Kept out of the base install so the core stays as
+# dependency-light as it is: most runs never write a report.
+report = ["reportlab>=4.2"]
+
 [project.urls]
 GitHub = "https://github.com/leoyala/dstrack"
 
@@ -93,9 +98,17 @@ enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 module = [
     "numpy.*",
     "pandas.*",
+    "reportlab.*",
     "sklearn.*",
 ]
 ignore_missing_imports = true
+
+# -----------------------------------------------------------------------------
+# coverage
+# -----------------------------------------------------------------------------
+[tool.coverage.run]
+# Manual helper for trying out `dstrack diff`; deliberately untested.
+omit = ["sample_data.py"]
 
 # -----------------------------------------------------------------------------
 # codespell: spell-checking for code, docstrings, and docs

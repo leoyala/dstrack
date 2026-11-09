@@ -65,7 +65,9 @@ Stored under `column_stats[<name>]` for each column.
 - `null_count`, `null_fraction`.
 - `num_unique`: cardinality.
 - `top_values`: top-K `{value: count}` pairs (e.g. K=50).
-- `top_values_coverage`: fraction of rows covered by `top_values`.
+- `top_values_coverage`: fraction of non-null values covered by `top_values`. Nulls are
+  excluded so that the share of untracked values (`1 - top_values_coverage`) measures only
+  real values; `null_fraction` reports missingness separately.
 - `avg_char_length`, `min_char_length`, `max_char_length`.
 - `avg_token_count`, `min_token_count`, `max_token_count` (whitespace-split).
 - `detected_languages`: top detected language codes with fractions.

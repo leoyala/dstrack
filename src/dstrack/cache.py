@@ -28,13 +28,13 @@ the ``HEAD`` on disk.
 import contextlib
 import logging
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
 from typing import Final
 
 from dstrack import store
 from dstrack.errors import IndexUnusable
-from dstrack.store import DatasetSummary, LogEntry
+from dstrack.store import DatasetSummary, LogEntry, SnapshotLocation
 
 _log = logging.getLogger(__name__)
 
@@ -43,7 +43,10 @@ INDEX_FILENAME: Final = "index.db"
 
 # Bump whenever the schema below changes: a mismatch rebuilds the index rather
 # than querying it with the wrong shape.
-_SCHEMA_VERSION: Final = "1"
+_SCHEMA_VERSION: Final = "2"
+
+# Escape character for SQL ``LIKE`` patterns built from user-supplied text.
+_LIKE_ESCAPE: Final = "\\"
 
 _SCHEMA: Final = """
 CREATE TABLE meta (
@@ -71,6 +74,20 @@ CREATE TABLE snapshots (
 );
 
 CREATE INDEX idx_snapshots_dataset ON snapshots(dataset_id);
+
+-- Snapshots reachable from a dataset's HEAD, without leaving that dataset: a
+-- parent link naming another dataset's snapshot is not part of this lineage.
+-- UNION, not UNION ALL, so that a looped lineage still terminates.
+CREATE VIEW committed_snapshots AS
+WITH RECURSIVE reachable(dataset_id, snapshot_id) AS (
+    SELECT dataset_id, head_snapshot_id FROM datasets WHERE head_snapshot_id IS NOT NULL
+    UNION
+    SELECT r.dataset_id, s.parent_snapshot_id FROM snapshots s
+    JOIN reachable r ON s.snapshot_id = r.snapshot_id AND s.dataset_id = r.dataset_id
+    WHERE s.parent_snapshot_id IS NOT NULL
+)
+SELECT s.* FROM snapshots s
+JOIN reachable r ON r.snapshot_id = s.snapshot_id AND r.dataset_id = s.dataset_id;
 """
 
 _SNAPSHOT_COLUMNS: Final = (
@@ -222,6 +239,66 @@ def find_dataset_by_path(dataset_path: str, *, store_root: Path) -> str | None:
     return dataset_id
 
 
+def find_snapshots_by_prefix(
+    prefix: str, *, store_root: Path, limit: int = 10
+) -> list[SnapshotLocation]:
+    """Return the committed snapshots whose id starts with `prefix`, sorted by id.
+
+    Only snapshots reachable from a dataset's indexed ``HEAD`` are considered,
+    so a log line that ``HEAD`` does not reach can neither be returned nor make
+    a prefix ambiguous.
+
+    Snapshot ids are UUID4s, which nobody types in full, so a user names one by
+    its leading characters the way git takes a short commit hash. The lookup
+    spans every dataset: a snapshot id says nothing about which dataset holds
+    it, so which one does is part of the answer rather than part of the
+    question.
+
+    Args:
+        prefix: Leading characters of a snapshot id. Matched literally --
+            SQL's ``LIKE`` wildcards are escaped, so a prefix containing ``_``
+            or ``%`` matches only ids that really contain them.
+        store_root: Path to the ``.dstrack/`` directory.
+        limit: Cap on how many matches are returned. Reporting an ambiguous
+            prefix needs enough candidates to list back to the user, not all
+            of them.
+
+    Returns:
+        Every matching snapshot, sorted by id and capped at `limit`. Empty if
+        the prefix matches nothing, or the index holds no snapshots yet.
+    """
+    with _connect(store_root) as conn:
+        rows = conn.execute(
+            "SELECT dataset_id, snapshot_id FROM committed_snapshots "
+            f"WHERE snapshot_id LIKE ? ESCAPE '{_LIKE_ESCAPE}' "
+            "ORDER BY snapshot_id LIMIT ?",
+            (f"{_escape_like(prefix)}%", limit),
+        ).fetchall()
+    return [
+        SnapshotLocation(dataset_id=row["dataset_id"], snapshot_id=row["snapshot_id"])
+        for row in rows
+    ]
+
+
+def _escape_like(value: str) -> str:
+    """Escape a string for use as a literal prefix in a SQL ``LIKE`` pattern.
+
+    ``_`` matches any single character and ``%`` any run of them, so a prefix
+    carrying either would silently match ids the user did not name. The escape
+    character itself has to go first, or escaping the others would re-escape
+    the backslashes just introduced.
+
+    Args:
+        value: The literal text to match.
+
+    Returns:
+        `value` with every ``LIKE`` meta character escaped.
+    """
+    for char in (_LIKE_ESCAPE, "%", "_"):
+        value = value.replace(char, f"{_LIKE_ESCAPE}{char}")
+    return value
+
+
 def list_datasets(*, store_root: Path) -> list[DatasetSummary]:
     """Return every indexed dataset, described by its latest snapshot.
 
@@ -248,7 +325,7 @@ def list_datasets(*, store_root: Path) -> list[DatasetSummary]:
 
 
 @contextlib.contextmanager
-def _connect(store_root: Path) -> Iterator[sqlite3.Connection]:
+def _connect(store_root: Path) -> Generator[sqlite3.Connection]:
     """Open the index, creating its parent directory if needed.
 
     Args:

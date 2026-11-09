@@ -33,12 +33,16 @@ import os
 import sys
 import tempfile
 import uuid
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
-from dstrack.errors import DatasetNotFoundError, StoreCorruptionError
+from dstrack.errors import (
+    DatasetNotFoundError,
+    SnapshotNotFoundError,
+    StoreCorruptionError,
+)
 
 # Lightweight identity fields copied from a snapshot into its `log.jsonl` line.
 # A subset of ADR-0001's fields: only those the current builders produce.
@@ -111,6 +115,23 @@ class DatasetSummary:
 
     dataset_id: str
     head: LogEntry | None
+
+
+@dataclass(frozen=True)
+class SnapshotLocation:
+    """Where a snapshot lives: which dataset owns it, and its own id.
+
+    A ``snapshot_id`` is a random UUID4 that says nothing about which dataset
+    holds it, but every path into the store starts at ``datasets/<dataset_id>/``.
+    Pairing the two is what lets a snapshot found by id be read back.
+
+    Attributes:
+        dataset_id: Dataset the snapshot belongs to.
+        snapshot_id: Identifier of the snapshot itself.
+    """
+
+    dataset_id: str
+    snapshot_id: str
 
 
 @dataclass(frozen=True)
@@ -285,6 +306,74 @@ def read_head(dataset_id: str, *, store_root: Path) -> str | None:
         ValueError: If ``dataset_id`` resolves to a path outside the store.
     """
     return _read_head(_resolve_dataset_dir(dataset_id, store_root))
+
+
+def snapshot_path(dataset_id: str, snapshot_id: str, *, store_root: Path) -> Path:
+    """Return the path of a snapshot's full JSON payload. Need not exist.
+
+    Args:
+        dataset_id: Dataset the snapshot belongs to.
+        snapshot_id: Snapshot to locate.
+        store_root: Path to the ``.dstrack/`` directory.
+
+    Returns:
+        The ``datasets/<dataset_id>/snapshots/<snapshot_id>.json`` path.
+
+    Raises:
+        ValueError: If either id resolves to a path outside the store.
+    """
+    snapshots_dir = _resolve_dataset_dir(dataset_id, store_root) / _SNAPSHOTS_DIRNAME
+    path = snapshots_dir / f"{snapshot_id}.json"
+    _ensure_direct_child(
+        base=snapshots_dir,
+        candidate=path,
+        kind="snapshot_id",
+        value=snapshot_id,
+    )
+    return path
+
+
+def read_snapshot(
+    dataset_id: str, snapshot_id: str, *, store_root: Path
+) -> dict[str, Any]:
+    """Return a snapshot's full payload, as [write_snapshot][dstrack.store.write_snapshot] wrote it.
+
+    The payload is returned as the plain mapping it was stored as, with no
+    schema validation: what a reader may do with a field it does not recognize
+    is the reader's concern, and a payload written by a different version of
+    dstrack is still worth returning.
+
+    Args:
+        dataset_id: Dataset the snapshot belongs to.
+        snapshot_id: Snapshot to read.
+        store_root: Path to the ``.dstrack/`` directory.
+
+    Returns:
+        The snapshot payload.
+
+    Raises:
+        ValueError: If either id resolves to a path outside the store.
+        SnapshotNotFoundError: If the dataset holds no such snapshot.
+        StoreCorruptionError: If the file is not a JSON object.
+        OSError: If the file cannot be read.
+    """
+    path = snapshot_path(dataset_id, snapshot_id, store_root=store_root)
+    if not path.is_file():
+        raise SnapshotNotFoundError(
+            f"No snapshot {snapshot_id!r} in dataset {dataset_id!r} (expected "
+            f"it at {path})."
+        )
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise StoreCorruptionError(f"{path} is not valid JSON: {e}") from e
+
+    if not isinstance(payload, dict):
+        raise StoreCorruptionError(
+            f"{path} does not hold a JSON object, but a {type(payload).__name__}."
+        )
+    return payload
 
 
 def dataset_log_path(dataset_id: str, *, store_root: Path) -> Path:
@@ -713,7 +802,7 @@ def _atomic_write(path: Path, text: str) -> None:
 
 
 @contextlib.contextmanager
-def _store_lock(store_root: Path) -> Iterator[None]:
+def _store_lock(store_root: Path) -> Generator[None]:
     """Hold an exclusive, cross-process lock on the store for the block's body.
 
     Serializes writers across processes so the resolve-parent-then-write

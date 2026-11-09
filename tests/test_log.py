@@ -12,15 +12,15 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from dstrack import _log, cache
+from dstrack import _resolve, cache
 from dstrack._cli import app
-from dstrack._log import (
-    _canonical_uuid,
-    _ensure_index,
-    _known_datasets,
-    _resolve_target,
-)
 from dstrack._log_render import _humanize
+from dstrack._resolve import (
+    canonical_uuid,
+    ensure_index,
+    known_datasets,
+    resolve_target,
+)
 from dstrack.errors import DatasetNotFoundError, StoreCorruptionError
 
 runner = CliRunner()
@@ -70,14 +70,14 @@ def _dataset_id_of(root: Path, path: Path) -> str:
 
 
 def _pretend_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make `_log` see a terminal on stdin, so it offers to build the index.
+    """Make `_resolve` see a terminal on stdin, so it offers to build the index.
 
     `CliRunner` installs its own `sys.stdin` for the duration of an invocation,
     which would undo a patch of the real one; the module's own reference to
     `sys` is replaced instead. Only `stdin.isatty` is ever read through it.
     """
     monkeypatch.setattr(
-        _log, "sys", SimpleNamespace(stdin=SimpleNamespace(isatty=lambda: True))
+        _resolve, "sys", SimpleNamespace(stdin=SimpleNamespace(isatty=lambda: True))
     )
 
 
@@ -351,14 +351,14 @@ def test_ensure_index_rebuild_discards_the_existing_index(
     assert _log_cmd(str(csv)).exit_code == 0
     assert cache.index_exists(store_root)
 
-    _ensure_index(store_root, yes=False, rebuild=True)
+    ensure_index(store_root, yes=False, rebuild=True)
 
     assert not cache.index_exists(store_root)
 
 
 def test_ensure_index_rebuild_on_a_missing_index_is_fine(store_root: Path) -> None:
     """--rebuild does not require an index to already be there."""
-    _ensure_index(store_root, yes=False, rebuild=True)
+    ensure_index(store_root, yes=False, rebuild=True)
 
     assert not cache.index_exists(store_root)
 
@@ -378,7 +378,7 @@ def test_log_rebuild_still_shows_the_history(tmp_path: Path, store_root: Path) -
 def test_ensure_index_without_a_terminal_raises_exit_one(store_root: Path) -> None:
     """The no-tty branch exits rather than blocking on a prompt."""
     with pytest.raises(typer.Exit) as excinfo:
-        _ensure_index(store_root, yes=False, rebuild=False)
+        ensure_index(store_root, yes=False, rebuild=False)
 
     assert excinfo.value.exit_code == 1
 
@@ -404,13 +404,13 @@ def test_canonical_uuid_accepts_alternate_spellings(
     """Uppercased, braced, dashless and urn ids all name the same dataset."""
     value = str(uuid.uuid4())
 
-    assert _canonical_uuid(spell(value)) == value
+    assert canonical_uuid(spell(value)) == value
 
 
 @pytest.mark.parametrize("value", ["", "data.csv", "not-a-uuid", "../etc/passwd"])
 def test_canonical_uuid_rejects_non_uuids(value: str) -> None:
     """Anything that is not a UUID in some spelling is not an id."""
-    assert _canonical_uuid(value) is None
+    assert canonical_uuid(value) is None
 
 
 def test_resolve_target_prefers_an_existing_id_over_a_path(
@@ -423,7 +423,7 @@ def test_resolve_target_prefers_an_existing_id_over_a_path(
     # A file in the cwd named exactly like the id must not be picked up.
     _write_csv(tmp_path / dataset_id)
 
-    resolved = _resolve_target(dataset_id, store_root=store_root, root=None)
+    resolved = resolve_target(dataset_id, store_root=store_root, root=None)
 
     assert resolved == dataset_id
 
@@ -434,7 +434,7 @@ def test_resolve_target_falls_back_to_a_path(tmp_path: Path, store_root: Path) -
     dataset_id = _track(store_root, csv)
     cache.sync(store_root)
 
-    assert _resolve_target(str(csv), store_root=store_root, root=None) == dataset_id
+    assert resolve_target(str(csv), store_root=store_root, root=None) == dataset_id
 
 
 def test_resolve_target_relative_path_matches(tmp_path: Path, store_root: Path) -> None:
@@ -443,7 +443,7 @@ def test_resolve_target_relative_path_matches(tmp_path: Path, store_root: Path) 
     dataset_id = _track(store_root, csv)
     cache.sync(store_root)
 
-    assert _resolve_target("data.csv", store_root=store_root, root=None) == dataset_id
+    assert resolve_target("data.csv", store_root=store_root, root=None) == dataset_id
 
 
 def test_resolve_target_unknown_id_reports_the_id(store_root: Path) -> None:
@@ -452,7 +452,7 @@ def test_resolve_target_unknown_id_reports_the_id(store_root: Path) -> None:
     missing = str(uuid.uuid4())
 
     with pytest.raises(DatasetNotFoundError, match="No dataset") as excinfo:
-        _resolve_target(missing, store_root=store_root, root=None)
+        resolve_target(missing, store_root=store_root, root=None)
 
     assert missing in str(excinfo.value)
 
@@ -462,7 +462,7 @@ def test_resolve_target_unknown_path_suggests_the_id(store_root: Path) -> None:
     cache.sync(store_root)
 
     with pytest.raises(DatasetNotFoundError, match="No tracked dataset") as excinfo:
-        _resolve_target("missing.csv", store_root=store_root, root=None)
+        resolve_target("missing.csv", store_root=store_root, root=None)
 
     message = str(excinfo.value)
     assert "missing.csv" in message
@@ -478,9 +478,9 @@ def test_resolve_target_honours_an_explicit_root(
     dataset_id = _track(store_root, csv, "--root", str(nested))
     cache.sync(store_root)
 
-    assert _resolve_target(str(csv), store_root=store_root, root=nested) == dataset_id
+    assert resolve_target(str(csv), store_root=store_root, root=nested) == dataset_id
     with pytest.raises(DatasetNotFoundError):
-        _resolve_target(str(csv), store_root=store_root, root=None)
+        resolve_target(str(csv), store_root=store_root, root=None)
 
 
 # ---------------------------------------------------------------------------
@@ -492,7 +492,7 @@ def test_known_datasets_on_an_empty_store(store_root: Path) -> None:
     """An empty store says so, and points at the command that fills it."""
     cache.sync(store_root)
 
-    listing = _known_datasets(store_root)
+    listing = known_datasets(store_root)
 
     assert "(none)" in listing
     assert "dstrack track" in listing
@@ -506,7 +506,7 @@ def test_known_datasets_lists_id_name_and_path(
     dataset_id = _track(store_root, csv, "--name", "clients")
     cache.sync(store_root)
 
-    listing = _known_datasets(store_root)
+    listing = known_datasets(store_root)
 
     assert dataset_id in listing
     assert "clients" in listing
@@ -519,7 +519,7 @@ def test_known_datasets_marks_missing_fields(store_root: Path) -> None:
     (store_root / "datasets" / dataset_id).mkdir()
     cache.sync(store_root)
 
-    listing = _known_datasets(store_root)
+    listing = known_datasets(store_root)
 
     assert dataset_id in listing
     assert "-" in listing
@@ -536,12 +536,12 @@ def test_known_datasets_drops_a_dataset_deleted_from_the_store(
     removed_id = _track(store_root, _write_csv(tmp_path / "gone.csv"))
     kept_id = _track(store_root, _write_csv(tmp_path / "kept.csv"))
     cache.sync(store_root)
-    assert removed_id in _known_datasets(store_root)
+    assert removed_id in known_datasets(store_root)
 
     shutil.rmtree(store_root / "datasets" / removed_id)
     cache.sync(store_root)
 
-    listing = _known_datasets(store_root)
+    listing = known_datasets(store_root)
     assert removed_id not in listing
     assert kept_id in listing
 
@@ -596,7 +596,7 @@ def test_log_surfaces_a_corrupt_store(
     def _boom(*args: object, **kwargs: object) -> bool:
         raise StoreCorruptionError("log.jsonl is not readable")
 
-    monkeypatch.setattr(_log.store, "dataset_exists", _boom)
+    monkeypatch.setattr(_resolve.store, "dataset_exists", _boom)
 
     result = _log_cmd(dataset_id)
 
