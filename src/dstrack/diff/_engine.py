@@ -23,7 +23,7 @@ import dataclasses
 import math
 from bisect import bisect_right
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Final
 
 from dstrack.diff import _extract
@@ -461,13 +461,20 @@ def _compare(
             severity=Severity.UNCHANGED,
         )
 
+    severity = _classify(key, delta=delta, pct_change=pct_change, options=options)
+    if datetime_bound:
+        # Relative change of an epoch value is tiny whatever moved -- a day is
+        # ~5e-5 of a present-day timestamp, a second ~6e-10 -- so it can fall
+        # under the _NEGLIGIBLE floor in `_band`. The bound has already been
+        # judged different by `abs_tolerance`; that verdict must stand.
+        severity = worst([severity, Severity.INFO])
     return MetricDiff(
         key=key,
         old=old,
         new=new,
         delta=delta,
         pct_change=pct_change,
-        severity=_classify(key, delta=delta, pct_change=pct_change, options=options),
+        severity=severity,
     )
 
 
@@ -774,10 +781,16 @@ def _epoch_seconds(value: str) -> float | None:
     Returns:
         The moment as epoch seconds, or ``None`` if it cannot be parsed. A
         trailing ``Z`` is translated first, matching how the stats computer
-        reads these values back.
+        reads these values back. A timestamp without an offset is read as UTC,
+        as recorded timestamps are elsewhere; ``datetime.timestamp`` would
+        otherwise apply the local zone and daylight-saving rules of whichever
+        machine runs the comparison.
     """
     parsed = _parse_timestamp(value)
-    return parsed.timestamp() if parsed is not None else None
+    if parsed is None:
+        return None
+    aware = parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed
+    return aware.timestamp()
 
 
 def _parse_timestamp(value: str) -> datetime | None:

@@ -251,7 +251,7 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1,
-          "description": "Fraction of rows covered by the top_values entries."
+          "description": "Fraction of non-null values covered by the top_values entries."
         },
         "avg_char_length": { "type": "number", "minimum": 0 },
         "min_char_length": { "type": "integer", "minimum": 0 },

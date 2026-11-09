@@ -1,6 +1,8 @@
 """Tests for the diff engine in src/dstrack/diff/."""
 
 import json
+import time
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -587,6 +589,22 @@ def test_coverage_within_rounding_is_scored_and_stays_bounded() -> None:
     assert _city_shift(old, new).score == 1.0
 
 
+def test_coverage_over_all_rows_is_not_scored() -> None:
+    """Coverage is a fraction of non-null values; counting nulls breaks the contract."""
+    old = _mutate(num_rows=100)
+    old["column_stats"]["city"].update(
+        null_count=50,
+        null_fraction=0.5,
+        top_values={"A": 50},
+        top_values_coverage=0.5,
+    )
+
+    shift = _city_shift(old, _mutate(num_rows=100))
+
+    assert shift.score is None
+    assert "coverage disagrees" in (shift.detail or "")
+
+
 # ---------------------------------------------------------------------------
 # Column kinds
 # ---------------------------------------------------------------------------
@@ -670,6 +688,48 @@ def test_datetime_bounds_keep_the_moment_they_recorded(
     by_key = {m.key: m for m in column.metrics}
     assert by_key["min"].old_display == shown
     assert by_key["min"].new_display == "2023-06-01 00:00:00Z"
+
+
+@pytest.fixture(params=["UTC0", "EST5EDT,M3.2.0,M11.1.0", "IST-5:30"])
+def host_zone(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Run a test as if the machine were set to each of several time zones."""
+    if not hasattr(time, "tzset"):
+        pytest.skip("the process time zone cannot be changed on this platform")
+    monkeypatch.setenv("TZ", request.param)
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+@pytest.mark.usefixtures("host_zone")
+def test_naive_datetime_bounds_ignore_the_host_daylight_saving_rules() -> None:
+    """Two wall-clock hours stay two hours across a US spring-forward gap."""
+    result = diff_snapshots(
+        _datetime_window("2024-03-10T01:30:00", "2024-12-31T00:00:00Z"),
+        _datetime_window("2024-03-10T03:30:00", "2024-12-31T00:00:00Z"),
+    )
+
+    column = next(c for c in result.columns if c.name == "ts")
+    by_key = {m.key: m for m in column.metrics}
+    assert by_key["min"].delta == pytest.approx(7200.0)
+
+
+@pytest.mark.usefixtures("host_zone")
+@pytest.mark.parametrize("aware", ["2024-01-01T00:00:00Z", "2024-01-01T05:30:00+05:30"])
+def test_naive_datetime_bound_is_compared_as_utc(aware: str) -> None:
+    """A bound without an offset matches the same reading written in UTC."""
+    result = diff_snapshots(
+        _datetime_window("2024-01-01T00:00:00", "2024-12-31T00:00:00Z"),
+        _datetime_window(aware, "2024-12-31T00:00:00Z"),
+    )
+
+    column = next(c for c in result.columns if c.name == "ts")
+    by_key = {m.key: m for m in column.metrics}
+    assert by_key["min"].delta == pytest.approx(0.0)
+    assert by_key["min"].severity is Severity.UNCHANGED
 
 
 def test_only_datetime_bounds_carry_a_display_form() -> None:
