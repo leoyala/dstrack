@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, TypeAlias, runtime_checkable
 
-# A single cell value after dtype coercion; None represents a missing value.
 Cell: TypeAlias = int | float | str | bool | None
+"""A single cell value after dtype coercion; `None` represents a missing value."""
 
 
 @dataclass(frozen=True)

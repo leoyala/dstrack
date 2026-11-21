@@ -15,11 +15,17 @@ Result types
 ------------
 [SnapshotMetadata][dstrack.snapshot._metadata.SnapshotMetadata],
 [DatasetStats][dstrack.snapshot._stats.DatasetStats]
+
+Constants
+---------
+[DEFAULT_MAX_ROWS][dstrack.snapshot.DEFAULT_MAX_ROWS]
+    Default row limit of a [StatsComputer][dstrack.snapshot._stats.StatsComputer].
 """
 
 from ._builder import SnapshotBuilder, build_snapshot_dict
 from ._metadata import MetadataBuilder, SnapshotMetadata
 from ._stats import (
+    DEFAULT_MAX_ROWS,
     DatasetStats,
     DatetimeColumnStats,
     HistogramStats,
@@ -31,6 +37,7 @@ from ._stats import (
 )
 
 __all__ = [
+    "DEFAULT_MAX_ROWS",
     "DatasetStats",
     "DatetimeColumnStats",
     "HistogramStats",

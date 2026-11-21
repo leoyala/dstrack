@@ -18,10 +18,13 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Final
 
-# Bumped only when a key already emitted changes meaning or disappears. Adding
-# a key is not a version change: consumers are expected to ignore what they do
-# not recognize.
 DIFF_FORMAT_VERSION: Final = "1"
+"""Version of the serialized diff format.
+
+Bumped only when a key already emitted changes meaning or disappears. Adding a
+key is not a version change: consumers are expected to ignore what they do not
+recognize.
+"""
 # Relative thresholds, for counts and other unbounded magnitudes.
 DEFAULT_REL_TOLERANCE: Final = 1e-3
 DEFAULT_ABS_TOLERANCE: Final = 1e-12
@@ -385,11 +388,8 @@ class DiffOptions:
 
 
 DEFAULT_OPTIONS: Final = DiffOptions()
+"""The thresholds used when no options are given; same as the `normal` preset."""
 
-# Named sensitivities, so the CLI can offer a choice without exposing twelve
-# float flags. `low` is for datasets that move constantly and where only a
-# structural break matters; `high` is for a curated table that should not move
-# at all.
 PRESETS: Final[dict[str, DiffOptions]] = {
     "low": DiffOptions(
         warn_pct_change=0.25,
@@ -417,6 +417,12 @@ PRESETS: Final[dict[str, DiffOptions]] = {
         critical_percentile_shift=0.10,
     ),
 }
+"""Named sensitivities, so the CLI can offer a choice without exposing twelve
+float flags.
+
+`low` is for datasets that move constantly and where only a structural break
+matters; `high` is for a curated table that should not move at all.
+"""
 
 
 def preset(name: str) -> DiffOptions:

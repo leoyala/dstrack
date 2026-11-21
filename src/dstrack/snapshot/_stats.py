@@ -1,7 +1,7 @@
 import math
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Final, Protocol
 
 from dstrack.errors import InputTooLargeError
 from dstrack.readers import Cell, TabularReader
@@ -11,10 +11,13 @@ _NUMERIC_DTYPES: frozenset[str] = frozenset(
 )
 _NUM_HISTOGRAM_BINS: int = 20
 _TOP_VALUES_K: int = 50
-# Default ceiling on the number of rows a single snapshot pass will accumulate.
-# The pass keeps per-column values, the distinct-row set, and per-string counts
-# in memory, so worst-case memory grows with the row count; this bounds it.
-_DEFAULT_MAX_ROWS: int = 10_000_000
+
+DEFAULT_MAX_ROWS: Final = 10_000_000
+"""Default ceiling on the number of rows a single snapshot pass will accumulate.
+
+The pass keeps per-column values, the distinct-row set, and per-string counts in
+memory, so worst-case memory grows with the row count; this bounds it.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,11 +258,11 @@ class StatsComputer:
             yields more than this, an
             [InputTooLargeError][dstrack.errors.InputTooLargeError] is raised.
             Defaults to
-            [_DEFAULT_MAX_ROWS][dstrack.snapshot._stats._DEFAULT_MAX_ROWS].
+            [DEFAULT_MAX_ROWS][dstrack.snapshot.DEFAULT_MAX_ROWS].
             Pass ``None`` to disable the limit when enough memory is available.
     """
 
-    def __init__(self, *, max_rows: int | None = _DEFAULT_MAX_ROWS) -> None:
+    def __init__(self, *, max_rows: int | None = DEFAULT_MAX_ROWS) -> None:
         self._max_rows = max_rows
 
     def compute(self, reader: TabularReader) -> DatasetStats:
