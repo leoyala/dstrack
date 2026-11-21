@@ -12,6 +12,7 @@ from dstrack.errors import StoreNotFoundError
 from dstrack.utils import get_invocation_path
 
 STORE_DIRNAME: Final = ".dstrack"
+"""Name of the directory that holds the local store."""
 ROOT_PATH_ENV_VAR: Final = "DSTRACK_ROOT_PATH"
 
 
