@@ -2,10 +2,10 @@
 
 import shutil
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Protocol
 
 import typer
 
@@ -33,8 +33,16 @@ def _main() -> None:
     """
 
 
+class _CsvKeptSink(Protocol):
+    """What [_workspace][dstrack._benchmark._cli._workspace] needs from a reporter."""
+
+    def csv_kept(self, path: Path) -> None: ...
+
+
 @contextmanager
-def _workspace(reporter: ConsoleReporter, *, keep_csv: bool) -> Iterator[Path]:
+def _workspace(
+    reporter: _CsvKeptSink, *, keep_csv: bool
+) -> Generator[Path, None, None]:
     """Yield a path for the synthetic CSV, discarding it unless ``keep_csv``."""
     tmp_dir = Path(tempfile.mkdtemp(prefix="dstrack-benchmark-"))
     csv_path = tmp_dir / "synthetic_dataset.csv"

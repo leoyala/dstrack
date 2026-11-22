@@ -104,7 +104,7 @@ class CallGraph:
     @classmethod
     def from_profile(cls, profiler: cProfile.Profile, scope: CallScope) -> "CallGraph":
         """Build the in-scope call graph of a profiler that has finished running."""
-        raw: _RawStats = pstats.Stats(profiler).stats  # type: ignore[attr-defined]
+        raw: _RawStats = pstats.Stats(profiler).stats  # ty: ignore[missing-attribute]
         graph = cls(_scope=scope)
         frames = {key for key in raw if scope.contains(key[0])}
         callees: set[FrameKey] = set()

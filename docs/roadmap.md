@@ -47,6 +47,7 @@ A first-class command-line experience ready for daily use.
 - [ ] `--fail-on-drift` exit code for CI pipelines
 - [ ] `--json` flag on all commands
 - [ ] Shell completion
+- [x] Replace `mypy` by `ty`
 
 ## v0.4 - Format and Integration Expansion
 

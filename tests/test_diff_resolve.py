@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from dstrack import cache, store
 from dstrack._cli import app
-from dstrack._resolve import resolve_pair, resolve_snapshot_ref
+from dstrack._resolve import ResolvedSnapshot, resolve_pair, resolve_snapshot_ref
 from dstrack.errors import (
     AmbiguousSnapshotError,
     DatasetNotFoundError,
@@ -64,7 +64,7 @@ def _synced(root: Path) -> Path:
     return root
 
 
-def _resolve(spec: str, root: Path) -> object:
+def _resolve(spec: str, root: Path) -> ResolvedSnapshot:
     """Resolve one reference against a synced store."""
     return resolve_snapshot_ref(spec, store_root=_synced(root), root=None)
 
@@ -362,7 +362,7 @@ def _pair(
     *,
     from_ref: str | None = None,
     to_ref: str | None = None,
-) -> tuple[object, object]:
+) -> tuple[ResolvedSnapshot, ResolvedSnapshot]:
     """Resolve both sides against a synced store."""
     return resolve_pair(
         specs,

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from dstrack.readers import ColumnInfo, CsvReader, TabularReader
+from dstrack.readers import Cell, ColumnInfo, CsvReader, TabularReader
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -17,7 +17,7 @@ def write_csv(tmp_path: Path, name: str, content: str) -> Path:
     return p
 
 
-def flat_rows(reader: CsvReader, batch_size: int = 1000) -> list[list[object]]:
+def flat_rows(reader: CsvReader, batch_size: int = 1000) -> list[list[Cell]]:
     """Flatten all batches from *reader* into a single list of rows."""
     return [row for batch in reader.iter_batches(batch_size) for row in batch]
 
@@ -40,7 +40,7 @@ def test_arbitrary_class_satisfies_protocol() -> None:
         def columns(self) -> list[ColumnInfo]:
             return []
 
-        def iter_batches(self, batch_size: int = 1000):  # type: ignore[override]
+        def iter_batches(self, batch_size: int = 1000):
             return iter([])
 
     assert isinstance(_Stub(), TabularReader)
@@ -219,7 +219,7 @@ def test_column_info_is_immutable() -> None:
     """ColumnInfo fields cannot be reassigned after construction."""
     col = ColumnInfo(name="x", dtype="int64")
     with pytest.raises((AttributeError, TypeError)):
-        col.name = "y"  # type: ignore[misc]
+        col.name = "y"  # ty: ignore[invalid-assignment]
 
 
 def test_raise_when_file_is_modified(tmp_path: Path) -> None:

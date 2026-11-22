@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Iterator
 from pathlib import Path, PurePath, PureWindowsPath
 
-from dstrack.readers import ColumnInfo, TabularReader
+from dstrack.readers import Cell, ColumnInfo, TabularReader
 from dstrack.snapshot import MetadataBuilder, SnapshotMetadata
 
 # ---------------------------------------------------------------------------
@@ -18,10 +18,10 @@ def _make_reader(*cols: ColumnInfo) -> TabularReader:
         def columns(self) -> list[ColumnInfo]:
             return list(cols)
 
-        def iter_batches(self, batch_size: int = 1000) -> Iterator[list[list[object]]]:
+        def iter_batches(self, batch_size: int = 1000) -> Iterator[list[list[Cell]]]:
             return iter([])
 
-    return _Stub()  # type: ignore[return-value]
+    return _Stub()
 
 
 def _build(

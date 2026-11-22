@@ -112,9 +112,9 @@ def test_find_store_root_stops_at_filesystem_boundary(
         def __getattr__(self, name: str) -> object:
             return getattr(self._real_result, name)
 
-    def fake_stat(self: Path, *args: object, **kwargs: object) -> _FakeStat:
+    def fake_stat(self: Path, *, follow_symlinks: bool = True) -> _FakeStat:
         on_mount = self == nested or nested in self.parents
-        real_result = real_stat(self, *args, **kwargs)
+        real_result = real_stat(self, follow_symlinks=follow_symlinks)
         return _FakeStat(real_result, st_dev=1 if on_mount else 2)
 
     monkeypatch.setattr(Path, "stat", fake_stat)

@@ -9,7 +9,7 @@ driven from a test with no console attached.
 
 import cProfile
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -175,7 +175,7 @@ class BenchmarkRunner:
         )
 
     @contextmanager
-    def _timed(self, *, profiled: bool = False) -> Iterator[_Elapsed]:
+    def _timed(self, *, profiled: bool = False) -> Generator[_Elapsed, None, None]:
         """Time the block, optionally recording it into the shared profiler."""
         profiler = self._profiler if profiled else None
         elapsed = _Elapsed()

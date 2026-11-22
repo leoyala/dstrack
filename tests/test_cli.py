@@ -79,7 +79,9 @@ def test_init_local_store_does_not_touch_destination_until_built(
 
     original_materialize = _store_template.materialize
 
-    def _check_and_materialize(template: object, parent: Path) -> Path:
+    def _check_and_materialize(
+        template: _store_template.TemplateDir, parent: Path
+    ) -> Path:
         assert not store_path.exists()
         return original_materialize(template, parent)
 

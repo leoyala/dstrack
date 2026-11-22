@@ -296,7 +296,7 @@ def test_instance_method_from_path_is_rejected_unconstructed(tmp_path: Path) -> 
 def test_register_reader_rejects_instance_method_from_path() -> None:
     """The non-classmethod check also guards registration, not just build time."""
     with pytest.raises(TypeError, match="classmethod"):
-        register_reader(InstanceFromPathReader, name="bad")  # type: ignore[arg-type]
+        register_reader(InstanceFromPathReader, name="bad")
 
     assert "bad" not in available_readers()
 
@@ -330,7 +330,7 @@ def test_non_class_target_is_rejected() -> None:
 def test_register_reader_rejects_invalid_class() -> None:
     """A class that fails validation leaves no half-finished registration behind."""
     with pytest.raises(TypeError, match="ReaderFactory"):
-        register_reader(NoFromPathReader, name="bad")  # type: ignore[arg-type]
+        register_reader(NoFromPathReader, name="bad")
 
     assert "bad" not in available_readers()
 

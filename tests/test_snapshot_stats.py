@@ -8,7 +8,13 @@ import pytest
 
 from dstrack.errors import InputTooLargeError
 from dstrack.readers import Cell, ColumnInfo, TabularReader
-from dstrack.snapshot import DatasetStats, StatsComputer
+from dstrack.snapshot import (
+    DatasetStats,
+    DatetimeColumnStats,
+    NumericColumnStats,
+    StatsComputer,
+    StringColumnStats,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -24,7 +30,7 @@ def _reader(cols: list[ColumnInfo], rows: list[list[Cell]]) -> TabularReader:
             if rows:
                 yield rows
 
-    return _Stub()  # type: ignore[return-value]
+    return _Stub()
 
 
 def _compute(cols: list[ColumnInfo], rows: list[list[Cell]]) -> DatasetStats:
@@ -172,6 +178,7 @@ def test_numeric_basic_stats() -> None:
         [[1], [2], [3], [4], [5]],
     )
     s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
     assert s.min == 1.0
     assert s.max == 5.0
     assert s.mean == pytest.approx(3.0, abs=1e-9)
@@ -197,7 +204,9 @@ def test_numeric_std_single_value() -> None:
         [ColumnInfo("v", "int64")],
         [[42]],
     )
-    assert stats.column_stats["v"].std == pytest.approx(0.0, abs=1e-9)
+    s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
+    assert s.std == pytest.approx(0.0, abs=1e-9)
 
 
 def test_numeric_percentiles_present() -> None:
@@ -206,7 +215,9 @@ def test_numeric_percentiles_present() -> None:
         [ColumnInfo("v", "int64")],
         [[i] for i in range(1, 101)],
     )
-    p = stats.column_stats["v"].percentiles
+    s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
+    p = s.percentiles
     assert {f.name for f in fields(p)} == {"p5", "p25", "p50", "p75", "p95", "p99"}
     assert p.p50 == pytest.approx(50.0, abs=2)
     assert p.p5 == pytest.approx(5.0, abs=2)
@@ -218,12 +229,14 @@ def test_numeric_percentiles_present() -> None:
 
 def test_numeric_histogram_bin_edge_count() -> None:
     """Histogram bin_edges has one more entry than counts, and counts sum to num_rows."""
-    rows = [[i] for i in range(1, 101)]
+    rows: list[list[Cell]] = [[i] for i in range(1, 101)]
     stats = _compute(
         [ColumnInfo("v", "int64")],
         rows,
     )
-    hist = stats.column_stats["v"].histogram
+    s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
+    hist = s.histogram
     counts = hist.counts
     edges = hist.bin_edges
     assert len(edges) == len(counts) + 1
@@ -237,6 +250,7 @@ def test_numeric_all_null_returns_zeros() -> None:
         [[None], [None]],
     )
     s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
     assert s.mean == 0.0
     assert s.std == 0.0
     assert s.num_unique == 0
@@ -249,6 +263,7 @@ def test_bool_treated_as_numeric() -> None:
         [[True], [False], [True]],
     )
     s = stats.column_stats["flag"]
+    assert isinstance(s, NumericColumnStats)
     assert s.mean == pytest.approx(2 / 3, abs=1e-9)
     assert s.min == 0.0
     assert s.max == 1.0
@@ -262,6 +277,7 @@ def test_numeric_nan_treated_as_null() -> None:
         [[1.0], [nan], [3.0]],
     )
     s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
     assert s.null_count == 1
     assert s.null_fraction == pytest.approx(1 / 3, abs=1e-9)
     assert s.min == 1.0
@@ -278,6 +294,7 @@ def test_numeric_infinity_treated_as_null() -> None:
         [[1.0], [float("inf")], [float("-inf")], [5.0]],
     )
     s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
     assert s.null_count == 2
     assert s.null_fraction == pytest.approx(0.5, abs=1e-9)
     assert s.min == 1.0
@@ -293,6 +310,7 @@ def test_numeric_all_non_finite_returns_zeros() -> None:
         [[float("nan")], [float("inf")]],
     )
     s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
     assert s.null_count == 2
     assert s.mean == 0.0
     assert s.std == 0.0
@@ -305,7 +323,9 @@ def test_numeric_non_finite_histogram_does_not_raise() -> None:
     rows: list[list[Cell]] = [[float(i)] for i in range(10)]
     rows.append([float("nan")])
     stats = _compute([ColumnInfo("v", "float64")], rows)
-    hist = stats.column_stats["v"].histogram
+    s = stats.column_stats["v"]
+    assert isinstance(s, NumericColumnStats)
+    hist = s.histogram
     assert len(hist.bin_edges) == len(hist.counts) + 1
     assert sum(hist.counts) == 10
 
@@ -322,6 +342,7 @@ def test_string_basic_stats() -> None:
         [["hello"], ["world"], ["hello"]],
     )
     s = stats.column_stats["s"]
+    assert isinstance(s, StringColumnStats)
     assert s.null_count == 0
     assert s.num_unique == 2
     assert s.top_values == {"hello": 2, "world": 1}
@@ -335,6 +356,7 @@ def test_string_char_length_stats() -> None:
         [["a"], ["bb"], ["ccc"]],
     )
     s = stats.column_stats["s"]
+    assert isinstance(s, StringColumnStats)
     assert s.min_char_length == 1
     assert s.max_char_length == 3
     assert s.avg_char_length == pytest.approx(2.0, abs=1e-9)
@@ -347,6 +369,7 @@ def test_string_token_count_stats() -> None:
         [["one"], ["two three"], ["four five six"]],
     )
     s = stats.column_stats["s"]
+    assert isinstance(s, StringColumnStats)
     assert s.min_token_count == 1
     assert s.max_token_count == 3
     assert s.avg_token_count == pytest.approx(2.0, abs=1e-9)
@@ -369,6 +392,7 @@ def test_string_top_values_coverage_partial() -> None:
     rows: list[list[Cell]] = [[str(i)] for i in range(200)]
     stats = _compute(cols, rows)
     s = stats.column_stats["s"]
+    assert isinstance(s, StringColumnStats)
     # 50 top values out of 200 = 0.25 coverage
     assert s.top_values_coverage == pytest.approx(50 / 200, abs=1e-9)
 
@@ -385,6 +409,7 @@ def test_datetime_min_max() -> None:
         [["2024-01-01"], ["2024-06-15"], ["2023-12-31"]],
     )
     s = stats.column_stats["dt"]
+    assert isinstance(s, DatetimeColumnStats)
     assert s.min == "2023-12-31"
     assert s.max == "2024-06-15"
 
@@ -396,6 +421,7 @@ def test_datetime_range_days() -> None:
         [["2024-01-01"], ["2024-01-11"]],
     )
     s = stats.column_stats["dt"]
+    assert isinstance(s, DatetimeColumnStats)
     assert s.range_days == pytest.approx(10.0, abs=1e-9)
 
 
@@ -417,6 +443,7 @@ def test_datetime_all_null() -> None:
         [[None], [None]],
     )
     s = stats.column_stats["dt"]
+    assert isinstance(s, DatetimeColumnStats)
     assert s.min == ""
     assert s.max == ""
     assert s.range_days == pytest.approx(0.0, abs=1e-9)
@@ -439,7 +466,7 @@ def _batched_reader(
         def iter_batches(self, batch_size: int = 1000) -> Iterator[list[list[Cell]]]:
             yield from batches
 
-    return _Stub()  # type: ignore[return-value]
+    return _Stub()
 
 
 def test_max_rows_at_limit_computes_normally() -> None:
