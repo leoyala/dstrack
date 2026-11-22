@@ -81,27 +81,17 @@ docstring-code-format = true
 quote-style = "double"
 
 # -----------------------------------------------------------------------------
-# mypy: static type checking
+# static type checking
 # -----------------------------------------------------------------------------
-[tool.mypy]
-files = ["src"]
-python_version = "3.11"
-strict = true
-show_error_codes = true
-warn_unreachable = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+[tool.ty.environment]
+python-version = "3.11"
 
-# Silence missing stubs for third-party libs that don't ship types.
-[[tool.mypy.overrides]]
-module = [
-    "numpy.*",
-    "pandas.*",
-    "reportlab.*",
-    "sklearn.*",
-]
-ignore_missing_imports = true
+[tool.ty.src]
+include = ["src", "tests"]
+exclude = ["src/generated"]
+
+[tool.ty.rules]
+unused-ignore-comment = "error"
 
 # -----------------------------------------------------------------------------
 # coverage
@@ -124,4 +114,5 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "zensical>=0.0.50",
+    "reportlab>=4.2"
 ]

@@ -77,11 +77,7 @@ def check_reader_class(obj: object, *, origin: str) -> type[TabularReader]:
             f"{qualname} (from {origin}) does not satisfy the TabularReader "
             "protocol: it must define columns() and iter_batches()."
         )
-    # Checked through an object-typed name: mypy assumes any class object
-    # already satisfies ReaderFactory, so narrowing from `object` is what keeps
-    # this branch live for the type checker as well as at runtime.
-    candidate: object = obj
-    if not isinstance(candidate, ReaderFactory):
+    if not isinstance(obj, ReaderFactory):
         raise TypeError(
             f"{qualname} (from {origin}) does not satisfy the ReaderFactory "
             "protocol: it must define a from_path(path) classmethod, which is "

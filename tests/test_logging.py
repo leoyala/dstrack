@@ -59,18 +59,20 @@ def test_configure_default_logging_is_idempotent() -> None:
 
 def test_emits_when_unconfigured(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no root handlers and no other dstrack handlers, records are written out."""
-    handler = _DefaultHandler(io.StringIO())
+    stream = io.StringIO()
+    handler = _DefaultHandler(stream)
     monkeypatch.setattr(logging.root, "handlers", [], raising=False)
     monkeypatch.setattr(logger, "handlers", [handler], raising=False)
 
     handler.emit(make_record(msg="uh oh"))
 
-    assert "uh oh" in handler.stream.getvalue()
+    assert "uh oh" in stream.getvalue()
 
 
 def test_yields_when_root_is_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     """If the root logger has handlers (app called basicConfig etc.), stay silent."""
-    handler = _DefaultHandler(io.StringIO())
+    stream = io.StringIO()
+    handler = _DefaultHandler(stream)
     monkeypatch.setattr(
         logging.root, "handlers", [logging.NullHandler()], raising=False
     )
@@ -78,14 +80,15 @@ def test_yields_when_root_is_configured(monkeypatch: pytest.MonkeyPatch) -> None
 
     handler.emit(make_record(msg="should not appear"))
 
-    assert handler.stream.getvalue() == ""
+    assert stream.getvalue() == ""
 
 
 def test_yields_when_dstrack_logger_has_other_handlers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """If the app attached its own handler to the dstrack logger, stay silent."""
-    handler = _DefaultHandler(io.StringIO())
+    stream = io.StringIO()
+    handler = _DefaultHandler(stream)
     monkeypatch.setattr(logging.root, "handlers", [], raising=False)
     monkeypatch.setattr(
         logger, "handlers", [handler, logging.NullHandler()], raising=False
@@ -93,4 +96,4 @@ def test_yields_when_dstrack_logger_has_other_handlers(
 
     handler.emit(make_record(msg="should not appear"))
 
-    assert handler.stream.getvalue() == ""
+    assert stream.getvalue() == ""

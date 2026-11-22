@@ -1,7 +1,7 @@
 import math
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Final, Protocol
+from typing import Final, Protocol, TypeAlias
 
 from dstrack.errors import InputTooLargeError
 from dstrack.readers import Cell, TabularReader
@@ -11,6 +11,12 @@ _NUMERIC_DTYPES: frozenset[str] = frozenset(
 )
 _NUM_HISTOGRAM_BINS: int = 20
 _TOP_VALUES_K: int = 50
+
+_NonNullCell: TypeAlias = int | float | str | bool
+"""A [Cell][dstrack.readers._protocol.Cell] known not to be ``None``.
+
+Nulls are counted by the row scan and never reach an accumulator's ``update``.
+"""
 
 DEFAULT_MAX_ROWS: Final = 10_000_000
 """Default ceiling on the number of rows a single snapshot pass will accumulate.
@@ -123,7 +129,7 @@ class _ColumnAcc(Protocol):
 
     null_count: int
 
-    def update(self, val: Cell) -> None: ...
+    def update(self, val: _NonNullCell) -> None: ...
 
     def is_constant(self) -> bool: ...
 
@@ -144,8 +150,8 @@ class _NumericAcc:
     vals: list[float] = field(default_factory=list)
     null_count: int = 0
 
-    def update(self, val: Cell) -> None:
-        f = float(val)  # type: ignore[arg-type]
+    def update(self, val: _NonNullCell) -> None:
+        f = float(val)
         if not math.isfinite(f):
             self.null_count += 1
             return
@@ -172,7 +178,7 @@ class _StringAcc:
     non_null_count: int = 0
     null_count: int = 0
 
-    def update(self, val: Cell) -> None:
+    def update(self, val: _NonNullCell) -> None:
         s = str(val)
         self.non_null_count += 1
         self.counter[s] += 1
@@ -206,7 +212,7 @@ class _DatetimeAcc:
     non_null_count: int = 0
     null_count: int = 0
 
-    def update(self, val: Cell) -> None:
+    def update(self, val: _NonNullCell) -> None:
         s = str(val)
         if self.non_null_count == 0 or s < self.min_val:
             self.min_val = s
@@ -230,7 +236,7 @@ class _OtherAcc:
 
     null_count: int = 0
 
-    def update(self, val: Cell) -> None:
+    def update(self, val: _NonNullCell) -> None:
         pass
 
     def is_constant(self) -> bool:

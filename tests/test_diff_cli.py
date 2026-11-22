@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
+from typer.testing import CliRunner, Result
 
 from dstrack import cache, store
 from dstrack._cli import app
@@ -69,7 +69,7 @@ def tracked(tmp_path: Path, store_root: Path) -> Path:
     return csv
 
 
-def _diff(*args: str, width: str = "160") -> object:
+def _diff(*args: str, width: str = "160") -> Result:
     """Invoke `dstrack diff` with `--yes`, at a fixed terminal width."""
     return runner.invoke(app, ["diff", *args, "--yes"], env={"COLUMNS": width})
 

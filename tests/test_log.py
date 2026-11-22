@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 import typer
-from typer.testing import CliRunner
+from typer.testing import CliRunner, Result
 
 from dstrack import _resolve, cache
 from dstrack._cli import app
@@ -81,7 +81,7 @@ def _pretend_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _log_cmd(*args: str) -> object:
+def _log_cmd(*args: str) -> Result:
     """Invoke `dstrack log` with `--yes`, so the index is built unprompted."""
     return runner.invoke(app, ["log", *args, "--yes"])
 

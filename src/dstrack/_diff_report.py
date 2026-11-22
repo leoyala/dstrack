@@ -705,7 +705,7 @@ def _numbered_canvas(kit: _Kit, *, now: datetime) -> Any:
     moment = now.astimezone(UTC) if now.tzinfo is not None else now
     stamp = moment.strftime("%Y-%m-%d %H:%M UTC")
 
-    class _NumberedCanvas(kit.canvas.Canvas):  # type: ignore[misc,name-defined]
+    class _NumberedCanvas(kit.canvas.Canvas):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
             self._pages: list[dict[str, Any]] = []
